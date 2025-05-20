@@ -5,16 +5,44 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use Illuminate\Http\Request;
 
+
+/**
+ * @OA\Tag(
+ *     name="Products",
+ *     description="Operaciones con productos y materias primas"
+ * )
+ */
 class ProductController extends Controller
 {
-    // Listar todos los productos
+    /**
+     * @OA\Get(
+     *     path="/api/products",
+     *     tags={"Products"},
+     *     summary="Listar todos los productos",
+     *     @OA\Response(response=200, description="Lista de productos")
+     * )
+     */
     public function index()
     {
         $products = Product::all();
         return response()->json($products);
     }
 
-    // Crear un nuevo producto o materia prima
+    /**
+     * @OA\Post(
+     *     path="/api/products",
+     *     tags={"Products"},
+     *     summary="Crear producto o materia prima",
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"type"},
+     *             @OA\Property(property="type", type="string", enum={"product", "raw_material"})
+     *         )
+     *     ),
+     *     @OA\Response(response=201, description="Producto creado")
+     * )
+     */
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -55,14 +83,44 @@ class ProductController extends Controller
         return response()->json(['message' => 'Producto creado exitosamente', 'product' => $product], 201);
     }
 
-    // Mostrar un producto por ID
+    /**
+     * @OA\Get(
+     *     path="/api/products/{id}",
+     *     tags={"Products"},
+     *     summary="Obtener producto por ID",
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(response=200, description="Producto encontrado")
+     * )
+     */
     public function show($id)
     {
         $product = Product::findOrFail($id);
         return response()->json($product);
     }
 
-    // Actualizar un producto
+    /**
+     * @OA\Put(
+     *     path="/api/products/{id}",
+     *     tags={"Products"},
+     *     summary="Actualizar producto",
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\RequestBody(
+     *         required=false,
+     *         @OA\JsonContent()
+     *     ),
+     *     @OA\Response(response=200, description="Producto actualizado")
+     * )
+     */
     public function update(Request $request, $id)
     {
         $product = Product::findOrFail($id);
@@ -93,7 +151,20 @@ class ProductController extends Controller
         return response()->json(['message' => 'Producto actualizado', 'product' => $product]);
     }
 
-    // Eliminar un producto
+    /**
+     * @OA\Delete(
+     *     path="/api/products/{id}",
+     *     tags={"Products"},
+     *     summary="Eliminar producto",
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(response=200, description="Producto eliminado")
+     * )
+     */
     public function destroy($id)
     {
         $product = Product::findOrFail($id);

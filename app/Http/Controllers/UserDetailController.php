@@ -6,8 +6,35 @@ use Illuminate\Http\Request;
 use App\Models\UserDetail;
 use Illuminate\Support\Facades\Auth;
 
+/**
+ * @OA\Tag(
+ *     name="UserDetails",
+ *     description="Operaciones con detalles de usuario"
+ * )
+ */
 class UserDetailController extends Controller
 {
+    /**
+     * @OA\Post(
+     *     path="/api/user-details",
+     *     tags={"User Details"},
+     *     summary="Crear o actualizar detalles del usuario",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"address","city","province","dni","phone"},
+     *             @OA\Property(property="address", type="string"),
+     *             @OA\Property(property="city", type="string"),
+     *             @OA\Property(property="province", type="string"),
+     *             @OA\Property(property="dni", type="string"),
+     *             @OA\Property(property="phone", type="string"),
+     *             @OA\Property(property="note", type="string", nullable=true)
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Detalles guardados correctamente")
+     * )
+     */
     public function store(Request $request)
     {
         $request->validate([
