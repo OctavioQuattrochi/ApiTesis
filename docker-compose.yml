@@ -10,7 +10,10 @@ services:
       - "8123:8000"
     depends_on:
       - db
+      - analyzer 
     command: php artisan serve --host=0.0.0.0 --port=8000
+    networks:
+      - backend
 
   db:
     image: mysql:8.0
@@ -24,6 +27,21 @@ services:
       MYSQL_PASSWORD: secret
     volumes:
       - dbdata:/var/lib/mysql
+    networks:
+      - backend
+
+  analyzer:
+    build:
+      context: ../ApiAnalyzer
+    container_name: apianalyzer
+    ports:
+      - "5000:5000"
+    networks:
+      - backend 
 
 volumes:
   dbdata:
+
+networks:
+  backend:
+    driver: bridge
