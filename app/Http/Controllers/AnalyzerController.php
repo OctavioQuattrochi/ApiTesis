@@ -8,8 +8,39 @@ use Illuminate\Support\Facades\Log;
 use App\Models\Product;
 use App\Models\Quote;
 
+/**
+ * @OA\Tag(
+ *     name="Analyzer",
+ *     description="Procesamiento de imagen para generar presupuesto"
+ * )
+ */
 class AnalyzerController extends Controller
 {
+    /**
+     * @OA\Post(
+     *     path="/api/analyze",
+     *     tags={"Analyzer"},
+     *     summary="Analizar una imagen y generar presupuesto estimado",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 required={"image", "height", "width", "color", "quantity"},
+     *                 @OA\Property(property="image", type="string", format="binary"),
+     *                 @OA\Property(property="height", type="number", format="float"),
+     *                 @OA\Property(property="width", type="number", format="float"),
+     *                 @OA\Property(property="color", type="string"),
+     *                 @OA\Property(property="quantity", type="integer", minimum=1)
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Presupuesto generado exitosamente"),
+     *     @OA\Response(response=422, description="Datos inválidos"),
+     *     @OA\Response(response=500, description="Error del microservicio o del servidor")
+     * )
+     */
     public function analyze(Request $request)
     {
         $request->validate([
@@ -130,6 +161,15 @@ class AnalyzerController extends Controller
         }
     }
 
+    /**
+     * @OA\Get(
+     *     path="/api/quotes",
+     *     tags={"Analyzer"},
+     *     summary="Listar todos los presupuestos generados",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Lista de presupuestos")
+     * )
+     */
     public function listQuotes()
     {
         return response()->json(Quote::latest()->get());

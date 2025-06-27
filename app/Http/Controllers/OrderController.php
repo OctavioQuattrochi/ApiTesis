@@ -8,10 +8,24 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * @OA\Tag(
+ *     name="Orders",
+ *     description="Gestión de pedidos"
+ * )
+ */
 class OrderController extends Controller
 {
-    /**
-     * Confirmar el carrito y generar una orden
+   /**
+     * @OA\Post(
+     *     path="/api/checkout",
+     *     tags={"Orders"},
+     *     summary="Confirmar el carrito y generar una orden",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=201, description="Orden creada con éxito"),
+     *     @OA\Response(response=400, description="El carrito está vacío"),
+     *     @OA\Response(response=500, description="Error al procesar la orden")
+     * )
      */
     public function checkout()
     {
@@ -63,7 +77,20 @@ class OrderController extends Controller
     }
 
     /**
-     * Listar todos los pedidos del usuario autenticado
+     * @OA\Get(
+     *     path="/api/orders",
+     *     tags={"Orders"},
+     *     summary="Listar todos los pedidos del usuario autenticado",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="status",
+     *         in="query",
+     *         required=false,
+     *         description="Filtrar por estado de la orden",
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\Response(response=200, description="Listado de órdenes")
+     * )
      */
     public function index(Request $request)
     {
@@ -84,7 +111,21 @@ class OrderController extends Controller
     }
 
     /**
-     * Ver el detalle de un pedido específico
+     * @OA\Get(
+     *     path="/api/orders/{id}",
+     *     tags={"Orders"},
+     *     summary="Ver el detalle de un pedido específico",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         required=true,
+     *         description="ID del pedido",
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(response=200, description="Detalle del pedido"),
+     *     @OA\Response(response=403, description="No autorizado")
+     * )
      */
     public function show($id)
     {
@@ -99,7 +140,29 @@ class OrderController extends Controller
     }
 
     /**
-     * Cambiar el estado de una orden
+     * @OA\Put(
+     *     path="/api/orders/{id}/status",
+     *     tags={"Orders"},
+     *     summary="Cambiar el estado de una orden",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         required=true,
+     *         description="ID de la orden",
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"status"},
+     *             @OA\Property(property="status", type="string", example="pending")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Estado actualizado"),
+     *     @OA\Response(response=403, description="No autorizado"),
+     *     @OA\Response(response=422, description="Estado inválido")
+     * )
      */
     public function updateStatus(Request $request, $id)
     {

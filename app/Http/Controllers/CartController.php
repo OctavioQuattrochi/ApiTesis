@@ -7,10 +7,23 @@ use App\Models\Cart;
 use App\Models\CartItem;
 use Illuminate\Support\Facades\Auth;
 
+
+/**
+ * @OA\Tag(
+ *     name="Cart",
+ *     description="Operaciones relacionadas al carrito de compras"
+ * )
+ */
 class CartController extends Controller
 {
     /**
-     * Obtener el carrito actual del usuario autenticado
+     * @OA\Get(
+     *     path="/api/cart",
+     *     tags={"Cart"},
+     *     summary="Obtener el carrito actual del usuario autenticado",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Carrito actual con productos y presupuestos")
+     * )
      */
     public function index()
     {
@@ -21,7 +34,24 @@ class CartController extends Controller
     }
 
     /**
-     * Agregar un ítem al carrito
+     * @OA\Post(
+     *     path="/api/cart/items",
+     *     tags={"Cart"},
+     *     summary="Agregar un ítem al carrito",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"quantity", "price_unit"},
+     *             @OA\Property(property="product_id", type="integer", example=1),
+     *             @OA\Property(property="quote_id", type="integer", example=2),
+     *             @OA\Property(property="quantity", type="integer", example=3),
+     *             @OA\Property(property="price_unit", type="number", format="float", example=123.45)
+     *         )
+     *     ),
+     *     @OA\Response(response=201, description="Ítem agregado al carrito"),
+     *     @OA\Response(response=422, description="Error de validación o datos incompletos")
+     * )
      */
     public function addItem(Request $request)
     {
@@ -54,7 +84,21 @@ class CartController extends Controller
     }
 
     /**
-     * Eliminar un ítem del carrito
+     * @OA\Delete(
+     *     path="/api/cart/items/{id}",
+     *     tags={"Cart"},
+     *     summary="Eliminar un ítem del carrito",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         required=true,
+     *         description="ID del ítem a eliminar",
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(response=200, description="Ítem eliminado del carrito"),
+     *     @OA\Response(response=403, description="No autorizado")
+     * )
      */
     public function removeItem($id)
     {
@@ -71,7 +115,13 @@ class CartController extends Controller
     }
 
     /**
-     * Vaciar todo el carrito
+     * @OA\Delete(
+     *     path="/api/cart",
+     *     tags={"Cart"},
+     *     summary="Vaciar todo el carrito",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Carrito vaciado correctamente")
+     * )
      */
     public function clear()
     {
