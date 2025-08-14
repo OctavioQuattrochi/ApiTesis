@@ -172,4 +172,33 @@ class ProductController extends Controller
 
         return response()->json(['message' => 'Producto eliminado correctamente']);
     }
+
+    /**
+     * @OA\Get(
+     *     path="/api/raw-materials",
+     *     tags={"Products"},
+     *     summary="Listar todas las materias primas",
+     *     @OA\Response(response=200, description="Lista de materias primas")
+     * )
+     */
+    public function rawMaterials()
+    {
+        $materials = Product::where('type', 'raw_material')->get();
+        return response()->json($materials);
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/predefined-products",
+     *     tags={"Products"},
+     *     summary="Listar solo los productos predefinidos",
+     *     @OA\Response(response=200, description="Lista de productos predefinidos")
+     * )
+     */
+    public function predefinedProducts()
+    {
+        $products = Product::where('type', 'product')->get();
+        return response()->json($products);
+    }
+    
 }

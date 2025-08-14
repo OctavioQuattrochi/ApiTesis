@@ -25,6 +25,12 @@ Route::middleware('auth:api')->group(function () {
         Route::get('/products', [ProductController::class, 'index']);
         Route::get('/products/{id}', [ProductController::class, 'show']);
 
+        // Productos predefinidos, no materia prima
+        Route::get('/predefined-products', [ProductController::class, 'predefinedProducts']);
+
+        // Materias primas (solo lectura)
+        Route::get('/raw-materials', [ProductController::class, 'rawMaterials']);
+
         // Análisis de imagen
         Route::post('/analyze', [AnalyzerController::class, 'analyze']);
 
