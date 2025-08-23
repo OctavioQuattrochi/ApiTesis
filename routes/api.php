@@ -29,10 +29,12 @@ Route::middleware('auth:api')->group(function () {
         Route::get('/predefined-products', [ProductController::class, 'predefinedProducts']);
 
         // Materias primas (solo lectura)
-        Route::get('/raw-materials', [ProductController::class, 'rawMaterials']);
+        Route::get('/raw-materials', [ProductController::class, 'GetRawMaterials']);
 
         // Análisis de imagen
         Route::post('/analyze', [AnalyzerController::class, 'analyze']);
+
+        Route::get('/quotes', [AnalyzerController::class, 'listQuotes']);
 
         // Carrito
         Route::get('/cart', [CartController::class, 'index']);
@@ -59,6 +61,8 @@ Route::middleware('auth:api')->group(function () {
 
     // Rutas exclusivas de superadmin
     Route::middleware('roleMiddleware:superadmin')->group(function () {
-        
+        Route::get('/presupuestos', [AnalyzerController::class, 'pendingQuotes']);
+        Route::get('/quotes/{id}', [AnalyzerController::class, 'show']);
+        Route::put('/quotes/{id}', [AnalyzerController::class, 'update']);
     });
 });

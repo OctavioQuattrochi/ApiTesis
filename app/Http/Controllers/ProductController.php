@@ -181,7 +181,7 @@ class ProductController extends Controller
      *     @OA\Response(response=200, description="Lista de materias primas")
      * )
      */
-    public function rawMaterials()
+    public function GetRawMaterials()
     {
         $materials = Product::where('type', 'raw_material')->get();
         return response()->json($materials);
