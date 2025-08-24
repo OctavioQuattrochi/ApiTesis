@@ -10,6 +10,8 @@ use App\Http\Controllers\OrderController;
 
 Route::post('/login', [AuthController::class, 'login'])->name('login');
 Route::post('/register', [AuthController::class, 'register']);
+Route::get('/predefined-products', [ProductController::class, 'predefinedProducts']);
+
 
 // Rutas protegidas por JWT
 Route::middleware('auth:api')->group(function () {
@@ -18,6 +20,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/user', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::post('/user/details', [UserDetailController::class, 'store']);
+    
 
     // Rutas accesibles por cualquier usuario logueado
     Route::middleware('roleMiddleware:usuario')->group(function () {
@@ -26,7 +29,7 @@ Route::middleware('auth:api')->group(function () {
         Route::get('/products/{id}', [ProductController::class, 'show']);
 
         // Productos predefinidos, no materia prima
-        Route::get('/predefined-products', [ProductController::class, 'predefinedProducts']);
+        
 
         // Materias primas (solo lectura)
         Route::get('/raw-materials', [ProductController::class, 'GetRawMaterials']);

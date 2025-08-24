@@ -9,6 +9,7 @@ class Product extends Model
     protected $fillable = [
         'type',
         'name',
+        'image',
         'color',
         'quantity',
         'location',
@@ -17,6 +18,15 @@ class Product extends Model
         'cost',
         'final_price'
     ];
+
+    // Accessor para la URL de la imagen
+    public function getImageUrlAttribute()
+    {
+        // Si la imagen está en el frontend, devolvé la ruta pública
+        return $this->image
+            ? "http://localhost:5173/src/sources/store/{$this->image}"
+            : null;
+    }
 
     // Auto-calcular el precio final si es materia prima
     protected static function booted()
