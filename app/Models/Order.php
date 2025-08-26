@@ -10,6 +10,7 @@ class Order extends Model
         'user_id',
         'total',
         'status',
+        'payment_method',
     ];
 
     const VALID_STATUSES = ['pending', 'paid', 'shipped', 'cancelled'];

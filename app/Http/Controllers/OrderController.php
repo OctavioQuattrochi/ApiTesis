@@ -16,59 +16,100 @@ use Illuminate\Support\Facades\DB;
  */
 class OrderController extends Controller
 {
-   /**
+    /**
      * @OA\Post(
      *     path="/api/checkout",
      *     tags={"Orders"},
      *     summary="Confirmar el carrito y generar una orden",
      *     security={{"bearerAuth":{}}},
-     *     @OA\Response(response=201, description="Orden creada con éxito"),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"payment_method", "items"},
+     *             @OA\Property(property="payment_method", type="string", example="transferencia"),
+     *             @OA\Property(
+     *                 property="items",
+     *                 type="array",
+     *                 @OA\Items(
+     *                     @OA\Property(property="product_id", type="integer", example=1),
+     *                     @OA\Property(property="quantity", type="integer", example=2)
+     *                 )
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=201,
+     *         description="Orden creada con éxito",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="order_number", type="integer", example=123456),
+     *             @OA\Property(property="total", type="number", format="float", example=13000)
+     *         )
+     *     ),
      *     @OA\Response(response=400, description="El carrito está vacío"),
+     *     @OA\Response(response=422, description="Datos inválidos"),
      *     @OA\Response(response=500, description="Error al procesar la orden")
      * )
      */
-    public function checkout()
+    public function checkout(Request $request)
     {
         $user = Auth::guard('api')->user();
-        $cart = $user->cart()->with('items.product')->first();
 
-        if (!$cart || $cart->items->isEmpty()) {
-            return response()->json(['error' => 'El carrito está vacío'], 400);
-        }
+        $request->validate([
+            'payment_method' => 'required|string',
+            'items' => 'required|array|min:1',
+            'items.*.product_id' => 'required|integer|exists:products,id',
+            'items.*.quantity' => 'required|integer|min:1',
+        ]);
 
         DB::beginTransaction();
 
         try {
-            $total = $cart->items->sum('subtotal');
+            $total = 0;
+            $orderItems = [];
+
+            foreach ($request->items as $item) {
+                $product = \App\Models\Product::find($item['product_id']);
+                $price_unit = $product->final_price ?? 0;
+                $subtotal = $item['quantity'] * $price_unit;
+                $total += $subtotal;
+
+                $orderItems[] = [
+                    'product_id' => $item['product_id'],
+                    'quantity' => $item['quantity'],
+                    'price_unit' => $price_unit,
+                    'subtotal' => $subtotal,
+                ];
+            }
 
             $order = Order::create([
                 'user_id' => $user->id,
                 'total' => $total,
                 'status' => 'pending',
+                'payment_method' => $request->payment_method,
             ]);
 
-            foreach ($cart->items as $item) {
+            foreach ($orderItems as $orderItem) {
                 OrderItem::create([
                     'order_id' => $order->id,
-                    'product_id' => $item->product_id,
-                    'quote_id' => $item->quote_id,
-                    'quantity' => $item->quantity,
-                    'price_unit' => $item->price_unit,
-                    'subtotal' => $item->subtotal,
+                    'product_id' => $orderItem['product_id'],
+                    'quantity' => $orderItem['quantity'],
+                    'price_unit' => $orderItem['price_unit'],
+                    'subtotal' => $orderItem['subtotal'],
                 ]);
 
                 // Descontar stock si es producto físico
-                if ($item->product && $item->product->type === 'product') {
-                    $item->product->decrement('quantity', $item->quantity);
+                $product = \App\Models\Product::find($orderItem['product_id']);
+                if ($product && $product->type === 'product') {
+                    $product->decrement('quantity', $orderItem['quantity']);
                 }
             }
 
-            // Vaciar el carrito
-            $cart->items()->delete();
-
             DB::commit();
 
-            return response()->json(['message' => 'Orden creada con éxito', 'order_id' => $order->id], 201);
+            return response()->json([
+                'order_number' => $order->id,
+                'total' => $order->total,
+            ], 201);
 
         } catch (\Exception $e) {
             DB::rollBack();

@@ -6,6 +6,16 @@ use Illuminate\Database\Eloquent\Model;
 
 class Quote extends Model
 {
+    const STATUSES = [
+        'pendiente',
+        'esperando_confirmacion',
+        'pendiente_pago',
+        'pagado',
+        'en_produccion',
+        'listo_para_entregar',
+        'entregado',
+    ];
+
     protected $fillable = [
         'user_id',
         'length_cm',
@@ -15,6 +25,7 @@ class Quote extends Model
         'quantity',
         'estimated_price',
         'raw_response',
+        'status',
     ];
 
     public function user()

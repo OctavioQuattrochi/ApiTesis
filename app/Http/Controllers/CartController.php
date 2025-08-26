@@ -69,18 +69,36 @@ class CartController extends Controller
         $user = Auth::guard('api')->user();
         $cart = $user->cart()->firstOrCreate(['user_id' => $user->id]);
 
-        $subtotal = $request->quantity * $request->price_unit;
+        // Buscar si ya existe el ítem en el carrito (por producto o por quote)
+        $query = $cart->items();
+        if ($request->product_id) {
+            $existingItem = $query->where('product_id', $request->product_id)->first();
+        } else {
+            $existingItem = $query->where('quote_id', $request->quote_id)->first();
+        }
 
-        $item = CartItem::create([
-            'cart_id' => $cart->id,
-            'product_id' => $request->product_id,
-            'quote_id' => $request->quote_id,
-            'quantity' => $request->quantity,
-            'price_unit' => $request->price_unit,
-            'subtotal' => $subtotal,
-        ]);
+        if ($existingItem) {
+            // Si existe, sumar la cantidad y actualizar el subtotal
+            $existingItem->quantity += $request->quantity;
+            $existingItem->subtotal = $existingItem->quantity * $existingItem->price_unit;
+            $existingItem->save();
 
-        return response()->json(['message' => 'Ítem agregado al carrito', 'item' => $item], 201);
+            return response()->json(['message' => 'Cantidad actualizada en el carrito', 'item' => $existingItem], 200);
+        } else {
+            // Si no existe, crear el ítem normalmente
+            $subtotal = $request->quantity * $request->price_unit;
+
+            $item = CartItem::create([
+                'cart_id' => $cart->id,
+                'product_id' => $request->product_id,
+                'quote_id' => $request->quote_id,
+                'quantity' => $request->quantity,
+                'price_unit' => $request->price_unit,
+                'subtotal' => $subtotal,
+            ]);
+
+            return response()->json(['message' => 'Ítem agregado al carrito', 'item' => $item], 201);
+        }
     }
 
     /**

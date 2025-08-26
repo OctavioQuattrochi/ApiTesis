@@ -159,7 +159,21 @@ EOT;
     public function listQuotes(Request $request)
     {
         $user = $request->user();
-        return response()->json(Quote::where('user_id', $user->id)->latest()->get()->values());
+
+        // Si es superadmin, ve todos los presupuestos
+        if ($user->role === 'superadmin') {
+            $query = Quote::with('user')->latest();
+        } else {
+            // Si no, solo los suyos
+            $query = Quote::with('user')->where('user_id', $user->id)->latest();
+        }
+
+        // Filtro opcional por estado
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+
+        return response()->json($query->get()->values());
     }
 
     public function pendingQuotes()
@@ -173,64 +187,83 @@ EOT;
     }
 
     /**
- * @OA\Get(
- *     path="/api/quotes/{id}",
- *     tags={"Analyzer"},
- *     summary="Obtener un presupuesto por ID",
- *     security={{"bearerAuth":{}}},
- *     @OA\Parameter(
- *         name="id",
- *         in="path",
- *         required=true,
- *         @OA\Schema(type="integer")
- *     ),
- *     @OA\Response(response=200, description="Presupuesto encontrado"),
- *     @OA\Response(response=404, description="No encontrado")
- * )
- */
-public function show($id)
-{
-    $quote = Quote::with('user')->find($id);
-    if (!$quote) {
-        return response()->json(['error' => 'Presupuesto no encontrado'], 404);
-    }
-    return response()->json($quote);
-}
-
-/**
- * @OA\Put(
- *     path="/api/quotes/{id}",
- *     tags={"Analyzer"},
- *     summary="Actualizar un presupuesto por ID",
- *     security={{"bearerAuth":{}}},
- *     @OA\Parameter(
- *         name="id",
- *         in="path",
- *         required=true,
- *         @OA\Schema(type="integer")
- *     ),
- *     @OA\RequestBody(
- *         required=true,
- *         @OA\JsonContent(
- *             @OA\Property(property="estimated_price", type="number"),
- *             @OA\Property(property="breakdown", type="string"),
- *             @OA\Property(property="status", type="string")
- *         )
- *     ),
- *     @OA\Response(response=200, description="Presupuesto actualizado"),
- *     @OA\Response(response=404, description="No encontrado")
- * )
- */
-public function update(Request $request, $id)
-{
-    $quote = Quote::find($id);
-    if (!$quote) {
-        return response()->json(['error' => 'Presupuesto no encontrado'], 404);
+     * @OA\Get(
+     *     path="/api/quotes/{id}",
+     *     tags={"Analyzer"},
+     *     summary="Obtener un presupuesto por ID",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(response=200, description="Presupuesto encontrado"),
+     *     @OA\Response(response=404, description="No encontrado")
+     * )
+     */
+    public function show($id)
+    {
+        $quote = Quote::with('user')->find($id);
+        if (!$quote) {
+            return response()->json(['error' => 'Presupuesto no encontrado'], 404);
+        }
+        return response()->json([
+            'id' => $quote->id,
+            'user_id' => $quote->user_id,
+            'height_cm' => $quote->height_cm,
+            'width_cm' => $quote->width_cm,
+            'color' => $quote->color,
+            'quantity' => $quote->quantity,
+            'estimated_price' => $quote->estimated_price,
+            'status' => $quote->status,
+            'created_at' => $quote->created_at,
+            'updated_at' => $quote->updated_at,
+            'user' => $quote->user,
+            // agrega otros campos si los necesitas
+        ]);
     }
 
-    $data = $request->only(['estimated_price', 'breakdown', 'status']);
-    $quote->update($data);
+    /**
+     * @OA\Put(
+     *     path="/api/quotes/{id}",
+     *     tags={"Analyzer"},
+     *     summary="Actualizar un presupuesto por ID",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="estimated_price", type="number"),
+     *             @OA\Property(property="breakdown", type="string"),
+     *             @OA\Property(property="status", type="string")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Presupuesto actualizado"),
+     *     @OA\Response(response=404, description="No encontrado")
+     * )
+     */
+    public function update(Request $request, $id)
+    {
+        $quote = Quote::find($id);
+        if (!$quote) {
+            return response()->json(['error' => 'Presupuesto no encontrado'], 404);
+        }
 
-    return response()->json(['message' => 'Presupuesto actualizado', 'quote' => $quote]);
-}
+        $request->validate([
+            'status' => 'nullable|string|in:' . implode(',', \App\Models\Quote::STATUSES),
+            'estimated_price' => 'nullable|numeric',
+            'breakdown' => 'nullable|string',
+        ]);
+
+        $data = $request->only(['estimated_price', 'breakdown', 'status']);
+        $quote->update($data);
+
+        return response()->json(['message' => 'Presupuesto actualizado', 'quote' => $quote]);
+    }
 }
