@@ -68,5 +68,8 @@ Route::middleware('auth:api')->group(function () {
         Route::get('/presupuestos', [AnalyzerController::class, 'pendingQuotes']);
         Route::get('/quotes/{id}', [AnalyzerController::class, 'show']);
         Route::put('/quotes/{id}', [AnalyzerController::class, 'update']);
+        Route::get('/users', [UserAdminController::class, 'index']);
+        Route::get('/users/{id}', [UserAdminController::class, 'show']);
+        Route::put('/users/{id}/role', [UserAdminController::class, 'updateRole']);
     });
 });

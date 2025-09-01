@@ -5,7 +5,7 @@ services:
       dockerfile: docker/php/Dockerfile
     container_name: api_tesis_app
     volumes:
-      - /c/Users/oquattrochi/Projects/octa/ApiTesis:/var/www/html
+      - ./:/var/www/html
     ports:
       - "8123:8000"
     depends_on:
@@ -34,7 +34,7 @@ services:
       context: ../ondaFront
     container_name: frontend
     ports:
-      - "9999:5173"
+      - "5173:5173"
     networks:
       - backend
 
