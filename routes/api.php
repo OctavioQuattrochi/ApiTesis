@@ -7,11 +7,16 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\AnalyzerController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\OrderController;
+use App\Http\Controllers\UserAdminController;
+use App\Http\Controllers\ProductionBatchController;
 
+// Autenticación y registro
 Route::post('/login', [AuthController::class, 'login'])->name('login');
 Route::post('/register', [AuthController::class, 'register']);
 Route::get('/predefined-products', [ProductController::class, 'predefinedProducts']);
 
+// Recuperar contraseña
+Route::post('/password/email', [AuthController::class, 'sendResetLinkEmail']);
 
 // Rutas protegidas por JWT
 Route::middleware('auth:api')->group(function () {
@@ -20,16 +25,13 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/user', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::post('/user/details', [UserDetailController::class, 'store']);
-    
+    Route::put('/user', [AuthController::class, 'updateProfile']); // <-- NUEVA RUTA PARA EDITAR PERFIL
 
     // Rutas accesibles por cualquier usuario logueado
     Route::middleware('roleMiddleware:usuario')->group(function () {
         // Productos (solo lectura)
         Route::get('/products', [ProductController::class, 'index']);
         Route::get('/products/{id}', [ProductController::class, 'show']);
-
-        // Productos predefinidos, no materia prima
-        
 
         // Materias primas (solo lectura)
         Route::get('/raw-materials', [ProductController::class, 'GetRawMaterials']);
@@ -52,7 +54,7 @@ Route::middleware('auth:api')->group(function () {
     });
 
     // Rutas para empleados (y superadmin)
-    Route::middleware('roleMiddleware:empleado')->group(function () {
+    Route::middleware('roleMiddleware:empleado,superadmin')->group(function () {
         // ABM productos
         Route::post('/products', [ProductController::class, 'store']);
         Route::put('/products/{id}', [ProductController::class, 'update']);
@@ -60,6 +62,14 @@ Route::middleware('auth:api')->group(function () {
 
         // Cambiar estado de órdenes
         Route::put('/orders/{id}/status', [OrderController::class, 'updateStatus']);
+
+        // Gestión de lotes de producción
+        Route::get('/produccion', [ProductionBatchController::class, 'index']);
+        Route::post('/produccion', [ProductionBatchController::class, 'store']);
+        Route::put('/produccion/{id}', [ProductionBatchController::class, 'update']);
+
+        // Consultar stock actual
+        Route::get('/stock', [ProductController::class, 'stock']);
     });
 
     // Rutas exclusivas de superadmin

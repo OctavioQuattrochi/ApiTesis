@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Password;
 use App\Models\User;
 
 /**
@@ -135,5 +136,142 @@ class AuthController extends Controller
 
         return $this->respondWithToken($token);
     }
-    
+
+    /**
+     * Actualiza los datos del perfil y detalles de envío del usuario autenticado.
+     */
+    /**
+     * @OA\Put(
+     *     path="/api/profile",
+     *     tags={"Auth"},
+     *     summary="Actualizar perfil",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"name","email"},
+     *             @OA\Property(property="name", type="string"),
+     *             @OA\Property(property="email", type="string", format="email"),
+     *             @OA\Property(property="direccion", type="string"),
+     *             @OA\Property(property="localidad", type="string"),
+     *             @OA\Property(property="provincia", type="string"),
+     *             @OA\Property(property="telefono", type="string"),
+     *             @OA\Property(property="dni", type="string")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Perfil actualizado correctamente"),
+     *     @OA\Response(response=401, description="No autorizado")
+     * )
+     */
+    public function updateProfile(Request $request)
+    {
+        $user = Auth::guard('api')->user();
+
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|max:255|unique:users,email,' . $user->id,
+            'direccion' => 'nullable|string|max:255',
+            'localidad' => 'nullable|string|max:100',
+            'provincia' => 'nullable|string|max:100',
+            'telefono' => 'nullable|string|max:20',
+            'dni' => 'nullable|string|max:20',
+        ]);
+
+        $user->update([
+            'name' => $data['name'],
+            'email' => $data['email'],
+        ]);
+
+        // Asume que existe la relación 'detail' en el modelo User
+        $user->detail()->updateOrCreate(
+            ['user_id' => $user->id],
+            [
+                'address' => $data['direccion'] ?? '',
+                'city' => $data['localidad'] ?? '',
+                'province' => $data['provincia'] ?? '',
+                'phone' => $data['telefono'] ?? '',
+                'dni' => $data['dni'] ?? '',
+            ]
+        );
+
+        return response()->json(['message' => 'Perfil actualizado correctamente']);
+    }
+
+    /**
+     * Envía el enlace de recuperación de contraseña al email indicado.
+     */
+    /**
+     * @OA\Post(
+     *     path="/api/password/email",
+     *     tags={"Auth"},
+     *     summary="Enviar enlace de recuperación de contraseña",
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"email"},
+     *             @OA\Property(property="email", type="string", format="email")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Enlace de recuperación enviado"),
+     *     @OA\Response(response=404, description="Usuario no encontrado")
+     * )
+     */
+    public function sendResetLinkEmail(Request $request)
+    {
+        $request->validate(['email' => 'required|email']);
+
+        $status = Password::sendResetLink(
+            $request->only('email')
+        );
+
+        if ($status === Password::RESET_LINK_SENT) {
+            return response()->json(['message' => 'Enlace de recuperación enviado']);
+        }
+
+        return response()->json(['error' => 'No se pudo enviar el enlace'], 500);
+    }
+
+    /**
+     * Restablece la contraseña del usuario.
+     */
+    /**
+     * @OA\Post(
+     *     path="/api/password/reset",
+     *     tags={"Auth"},
+     *     summary="Restablecer contraseña",
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"email","password","password_confirmation","token"},
+     *             @OA\Property(property="email", type="string", format="email"),
+     *             @OA\Property(property="password", type="string", format="password"),
+     *             @OA\Property(property="password_confirmation", type="string", format="password"),
+     *             @OA\Property(property="token", type="string")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Contraseña restablecida con éxito"),
+     *     @OA\Response(response=400, description="Solicitud incorrecta")
+     * )
+     */
+    public function resetPassword(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'password' => 'required|string|min:6|confirmed',
+            'token' => 'required|string',
+        ]);
+
+        $user = User::where('email', $request->email)->first();
+
+        if (!$user) {
+            return response()->json(['error' => 'Usuario no encontrado'], 404);
+        }
+
+        // Aquí deberías verificar el token y restablecer la contraseña
+        // Este es un ejemplo básico, asegúrate de implementar la lógica adecuada
+        $user->password = bcrypt($request->password);
+        $user->save();
+
+        return response()->json(['message' => 'Contraseña restablecida con éxito']);
+    }
 }

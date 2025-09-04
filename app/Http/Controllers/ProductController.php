@@ -200,5 +200,16 @@ class ProductController extends Controller
         $products = Product::where('type', 'product')->get();
         return response()->json($products);
     }
-    
+
+    /**
+     * Consultar el stock actual de productos (base + variante/color)
+     */
+    public function stock(Request $request)
+    {
+        $products = Product::select('id', 'name', 'color', 'quantity')
+            ->orderBy('name')
+            ->get();
+
+        return response()->json($products);
+    }
 }
