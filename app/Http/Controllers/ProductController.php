@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
+use App\Models\ProductionBatch;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 
 /**
@@ -25,6 +27,7 @@ class ProductController extends Controller
     public function index()
     {
         $products = Product::all();
+        Log::channel('produccion')->info('Listado de productos consultado', ['total' => $products->count()]);
         return response()->json($products);
     }
 
@@ -80,6 +83,13 @@ class ProductController extends Controller
             ]);
         }
 
+        Log::channel('produccion')->info('Producto creado', [
+            'product_id' => $product->id,
+            'type' => $product->type,
+            'name' => $product->name ?? null,
+            'color' => $product->color ?? null,
+        ]);
+
         return response()->json(['message' => 'Producto creado exitosamente', 'product' => $product], 201);
     }
 
@@ -100,6 +110,7 @@ class ProductController extends Controller
     public function show($id)
     {
         $product = Product::findOrFail($id);
+        Log::channel('produccion')->info('Detalle de producto consultado', ['product_id' => $product->id]);
         return response()->json($product);
     }
 
@@ -148,6 +159,13 @@ class ProductController extends Controller
             $product->update($validated);
         }
 
+        Log::channel('produccion')->info('Producto actualizado', [
+            'product_id' => $product->id,
+            'type' => $product->type,
+            'name' => $product->name ?? null,
+            'color' => $product->color ?? null,
+        ]);
+
         return response()->json(['message' => 'Producto actualizado', 'product' => $product]);
     }
 
@@ -170,6 +188,8 @@ class ProductController extends Controller
         $product = Product::findOrFail($id);
         $product->delete();
 
+        Log::channel('produccion')->info('Producto eliminado', ['product_id' => $id]);
+
         return response()->json(['message' => 'Producto eliminado correctamente']);
     }
 
@@ -184,6 +204,7 @@ class ProductController extends Controller
     public function GetRawMaterials()
     {
         $materials = Product::where('type', 'raw_material')->get();
+        Log::channel('produccion')->info('Listado de materias primas consultado', ['total' => $materials->count()]);
         return response()->json($materials);
     }
 
@@ -198,18 +219,36 @@ class ProductController extends Controller
     public function predefinedProducts()
     {
         $products = Product::where('type', 'product')->get();
+        Log::channel('produccion')->info('Listado de productos predefinidos consultado', ['total' => $products->count()]);
         return response()->json($products);
     }
 
     /**
-     * Consultar el stock actual de productos (base + variante/color)
+     * Consultar el stock actual de productos (base + variante/color) incluyendo el estado de producción
      */
     public function stock(Request $request)
     {
         $products = Product::select('id', 'name', 'color', 'quantity')
+            ->where('type', 'product')
             ->orderBy('name')
             ->get();
 
-        return response()->json($products);
+        $result = $products->map(function ($product) {
+            $lastBatch = ProductionBatch::where('product_id', $product->id)
+                ->orderBy('updated_at', 'desc')
+                ->first();
+
+            return [
+                'id' => $product->id,
+                'name' => $product->name,
+                'color' => $product->color,
+                'quantity' => $product->quantity,
+                'status' => $lastBatch ? $lastBatch->status : null,
+            ];
+        });
+
+        Log::channel('produccion')->info('Listado de stock consultado', ['total' => $result->count()]);
+
+        return response()->json($result);
     }
 }

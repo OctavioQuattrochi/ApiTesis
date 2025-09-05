@@ -6,6 +6,7 @@ use App\Models\ProductionBatch;
 use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 /**
  * @OA\Tag(
@@ -80,7 +81,15 @@ class ProductionBatchController extends Controller
 
         $batch = ProductionBatch::create($data);
 
-        // Si el lote se crea como "Finalizado", sumar al stock
+        Log::channel('produccion')->info('Lote de producción creado', [
+            'batch_id' => $batch->id,
+            'product_id' => $batch->product_id,
+            'color' => $batch->color,
+            'quantity' => $batch->quantity,
+            'status' => $batch->status,
+            'created_by' => $batch->created_by,
+        ]);
+
         if ($batch->status === 'Finalizado') {
             $this->addToStock($batch);
         }
@@ -126,7 +135,12 @@ class ProductionBatchController extends Controller
         $batch->fill($data);
         $batch->save();
 
-        // Si pasa a "Finalizado" y antes no lo estaba, sumar al stock
+        Log::channel('produccion')->info('Lote de producción actualizado', [
+            'batch_id' => $batch->id,
+            'new_status' => $batch->status,
+            'quantity' => $batch->quantity,
+        ]);
+        
         if ($batch->status === 'Finalizado' && !$wasFinalized) {
             $this->addToStock($batch);
         }

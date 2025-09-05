@@ -127,6 +127,22 @@ return [
             'path' => storage_path('logs/laravel.log'),
         ],
 
+        'presupuestos' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/presupuestos.log'),
+            'level' => 'debug',
+        ],
+        'produccion' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/produccion.log'),
+            'level' => 'debug',
+        ],
+        'usuarios' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/usuarios.log'),
+            'level' => 'debug',
+        ],
+
     ],
 
 ];

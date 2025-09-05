@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\Cart;
 use App\Models\CartItem;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 
 /**
@@ -29,6 +30,8 @@ class CartController extends Controller
     {
         $user = Auth::guard('api')->user();
         $cart = $user->cart()->with('items.product', 'items.quote')->firstOrCreate();
+
+        Log::channel('usuarios')->info('Consulta de carrito', ['user_id' => $user->id, 'cart_id' => $cart->id]);
 
         return response()->json($cart->load('items.product', 'items.quote'));
     }
@@ -63,13 +66,13 @@ class CartController extends Controller
         ]);
 
         if (!$request->product_id && !$request->quote_id) {
+            Log::channel('usuarios')->warning('Intento de agregar ítem sin product_id ni quote_id', ['user_id' => Auth::guard('api')->id()]);
             return response()->json(['error' => 'Se debe enviar product_id o quote_id'], 422);
         }
 
         $user = Auth::guard('api')->user();
         $cart = $user->cart()->firstOrCreate(['user_id' => $user->id]);
 
-        // Buscar si ya existe el ítem en el carrito (por producto o por quote)
         $query = $cart->items();
         if ($request->product_id) {
             $existingItem = $query->where('product_id', $request->product_id)->first();
@@ -78,10 +81,17 @@ class CartController extends Controller
         }
 
         if ($existingItem) {
-            // Si existe, sumar la cantidad y actualizar el subtotal
+            // Si ya existe, actualizar la cantidad y subtotal
             $existingItem->quantity += $request->quantity;
             $existingItem->subtotal = $existingItem->quantity * $existingItem->price_unit;
             $existingItem->save();
+
+            Log::channel('usuarios')->info('Cantidad actualizada en el carrito', [
+                'user_id' => $user->id,
+                'cart_id' => $cart->id,
+                'item_id' => $existingItem->id,
+                'quantity' => $existingItem->quantity,
+            ]);
 
             return response()->json(['message' => 'Cantidad actualizada en el carrito', 'item' => $existingItem], 200);
         } else {
@@ -95,6 +105,13 @@ class CartController extends Controller
                 'quantity' => $request->quantity,
                 'price_unit' => $request->price_unit,
                 'subtotal' => $subtotal,
+            ]);
+
+            Log::channel('usuarios')->info('Ítem agregado al carrito', [
+                'user_id' => $user->id,
+                'cart_id' => $cart->id,
+                'item_id' => $item->id,
+                'quantity' => $item->quantity,
             ]);
 
             return response()->json(['message' => 'Ítem agregado al carrito', 'item' => $item], 201);
@@ -124,10 +141,19 @@ class CartController extends Controller
         $item = CartItem::findOrFail($id);
 
         if ($item->cart->user_id !== $user->id) {
+            Log::channel('usuarios')->warning('Intento de eliminar ítem no autorizado', [
+                'user_id' => $user->id,
+                'item_id' => $item->id,
+            ]);
             return response()->json(['error' => 'No autorizado'], 403);
         }
 
         $item->delete();
+
+        Log::channel('usuarios')->info('Ítem eliminado del carrito', [
+            'user_id' => $user->id,
+            'item_id' => $id,
+        ]);
 
         return response()->json(['message' => 'Ítem eliminado del carrito']);
     }
@@ -148,6 +174,10 @@ class CartController extends Controller
 
         if ($cart) {
             $cart->items()->delete();
+            Log::channel('usuarios')->info('Carrito vaciado', [
+                'user_id' => $user->id,
+                'cart_id' => $cart->id,
+            ]);
         }
 
         return response()->json(['message' => 'Carrito vaciado correctamente']);

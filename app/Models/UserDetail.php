@@ -19,7 +19,6 @@ class UserDetail extends Model
         'note',
     ];
 
-    // Relación inversa al usuario
     public function user()
     {
         return $this->belongsTo(User::class);

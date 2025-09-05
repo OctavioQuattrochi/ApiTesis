@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
 use App\Models\Product;
 use App\Models\Quote;
+use App\Mail\PresupuestoConfirmacionMail;
 
 /**
  * @OA\Tag(
@@ -51,7 +53,6 @@ class AnalyzerController extends Controller
             'quantity' => 'required|integer|min:1',
         ]);
 
-        // Obtén los precios de la base de datos
         $neon = Product::where('material', 'Tira Neón')->first();
         $fuente = Product::where('material', 'Fuente')->first();
         $acrilico = Product::where('material', 'Acrílico')->first();
@@ -62,7 +63,6 @@ class AnalyzerController extends Controller
 
         $imageName = $request->file('image')->getClientOriginalName();
 
-        // Prompt detallado para ChatGPT (NO uses xxxx como ejemplo)
         $prompt = <<<EOT
 Eres un experto en fabricación de carteles de neón LED. 
 Te daré los datos de un diseño y tus tareas son:
@@ -99,17 +99,15 @@ EOT;
                 ]);
 
             if ($response->failed()) {
-                Log::error('Error al obtener presupuesto de ChatGPT', ['response' => $response->body()]);
+                Log::channel('presupuestos')->error('Error al obtener presupuesto de ChatGPT', ['response' => $response->body()]);
                 return response()->json(['error' => 'Error al obtener presupuesto de ChatGPT'], 500);
             }
 
             $data = $response->json();
             $presupuesto = $data['choices'][0]['message']['content'] ?? 'No se pudo calcular el presupuesto.';
 
-            // Loguea el texto completo del presupuesto para debug
-            Log::info('Texto presupuesto generado por OpenAI', ['presupuesto' => $presupuesto]);
+            Log::channel('presupuestos')->info('Texto presupuesto generado por OpenAI', ['presupuesto' => $presupuesto]);
 
-            // Extrae el total del presupuesto del texto (busca "TOTAL: $[valor numérico]" o "Total: [valor] ARS")
             $estimated_price = null;
             if (preg_match('/TOTAL:\s*\$?([\d\.,]+)/i', $presupuesto, $matches)) {
                 $num = preg_replace('/[^\d\.,]/', '', $matches[1]);
@@ -121,9 +119,8 @@ EOT;
                 $estimated_price = is_numeric($num) ? floatval($num) : null;
             }
 
-            Log::info('Valor extraído para estimated_price', ['estimated_price' => $estimated_price]);
+            Log::channel('presupuestos')->info('Valor extraído para estimated_price', ['estimated_price' => $estimated_price]);
 
-            // Guarda el presupuesto como quote
             $quote = Quote::create([
                 'user_id' => auth()->id(),
                 'length_cm' => null,
@@ -136,13 +133,15 @@ EOT;
                 'status' => 'pendiente',
             ]);
 
+            Log::channel('presupuestos')->info('Presupuesto creado', ['quote_id' => $quote->id, 'data' => $quote]);
+
             return response()->json([
                 'estimated_price' => $estimated_price,
                 'quote_id' => $quote->id,
                 'raw' => $data,
             ]);
         } catch (\Exception $e) {
-            Log::error('Excepción general', ['message' => $e->getMessage()]);
+            Log::channel('presupuestos')->error('Excepción general', ['message' => $e->getMessage()]);
             return response()->json(['error' => 'Error interno del servidor'], 500);
         }
     }
@@ -160,15 +159,12 @@ EOT;
     {
         $user = $request->user();
 
-        // Si es superadmin, ve todos los presupuestos
-        if ($user->role === 'superadmin') {
-            $query = Quote::with('user')->latest();
-        } else {
-            // Si no, solo los suyos
-            $query = Quote::with('user')->where('user_id', $user->id)->latest();
+        $query = Quote::with('user')->latest();
+
+        if ($user->role !== 'superadmin') {
+            $query->where('user_id', $user->id);
         }
 
-        // Filtro opcional por estado
         if ($request->has('status')) {
             $query->where('status', $request->status);
         }
@@ -220,7 +216,6 @@ EOT;
             'created_at' => $quote->created_at,
             'updated_at' => $quote->updated_at,
             'user' => $quote->user,
-            // agrega otros campos si los necesitas
         ]);
     }
 
@@ -252,6 +247,7 @@ EOT;
     {
         $quote = Quote::find($id);
         if (!$quote) {
+            Log::channel('presupuestos')->error('Presupuesto no encontrado', ['quote_id' => $id]);
             return response()->json(['error' => 'Presupuesto no encontrado'], 404);
         }
 
@@ -261,8 +257,28 @@ EOT;
             'breakdown' => 'nullable|string',
         ]);
 
+        $oldStatus = $quote->status;
         $data = $request->only(['estimated_price', 'breakdown', 'status']);
         $quote->update($data);
+
+        Log::channel('presupuestos')->info('Presupuesto actualizado', [
+            'quote_id' => $quote->id,
+            'old_status' => $oldStatus,
+            'new_status' => $data['status'] ?? null,
+            'estimated_price' => $data['estimated_price'] ?? null,
+        ]);
+
+        if (
+            isset($data['status']) &&
+            $data['status'] === 'esperando_confirmacion' &&
+            $oldStatus !== 'esperando_confirmacion'
+        ) {
+            Mail::to($quote->user->email)->send(new PresupuestoConfirmacionMail($quote));
+            Log::channel('presupuestos')->info('Email de confirmación enviado', [
+                'quote_id' => $quote->id,
+                'email' => $quote->user->email,
+            ]);
+        }
 
         return response()->json(['message' => 'Presupuesto actualizado', 'quote' => $quote]);
     }

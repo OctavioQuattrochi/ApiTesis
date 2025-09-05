@@ -7,6 +7,7 @@ use App\Models\OrderItem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * @OA\Tag(
@@ -16,6 +17,16 @@ use Illuminate\Support\Facades\DB;
  */
 class OrderController extends Controller
 {
+    // Estados recomendados para órdenes
+    const VALID_STATUSES = [
+        'pending',      // Pedido creado, esperando pago
+        'paid',         // Pagado y confirmado por admin
+        'processing',   // En preparación
+        'shipped',      // Enviado al cliente
+        'delivered',    // Entregado al cliente
+        'cancelled',    // Cancelado
+    ];
+
     /**
      * @OA\Post(
      *     path="/api/checkout",
@@ -96,13 +107,19 @@ class OrderController extends Controller
                     'price_unit' => $orderItem['price_unit'],
                     'subtotal' => $orderItem['subtotal'],
                 ]);
-
-                // Descontar stock si es producto físico
+                    // Reducir stock del producto
                 $product = \App\Models\Product::find($orderItem['product_id']);
                 if ($product && $product->type === 'product') {
                     $product->decrement('quantity', $orderItem['quantity']);
                 }
             }
+
+            Log::channel('usuarios')->info('Orden creada', [
+                'order_id' => $order->id,
+                'user_id' => $user->id,
+                'total' => $order->total,
+                'payment_method' => $order->payment_method,
+            ]);
 
             DB::commit();
 
@@ -113,6 +130,10 @@ class OrderController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
+            Log::channel('usuarios')->error('Error al procesar la orden', [
+                'user_id' => $user->id,
+                'details' => $e->getMessage(),
+            ]);
             return response()->json(['error' => 'No se pudo procesar la orden', 'details' => $e->getMessage()], 500);
         }
     }
@@ -136,17 +157,32 @@ class OrderController extends Controller
     public function index(Request $request)
     {
         $user = Auth::guard('api')->user();
-        $query = $user->orders()->with('items.product', 'items.quote')->latest();
+
+        if ($user->role === 'superadmin' || $user->role === 'empleado') {
+            $query = Order::with('items.product', 'items.quote', 'user')->latest();
+        } else {
+            $query = $user->orders()->with('items.product', 'items.quote', 'user')->latest();
+        }
 
         if ($request->has('status')) {
             $status = $request->status;
 
-            if (!in_array($status, Order::VALID_STATUSES)) {
+            if (!in_array($status, self::VALID_STATUSES)) {
+                Log::channel('usuarios')->warning('Intento de filtrar órdenes por estado inválido', [
+                    'user_id' => $user->id,
+                    'status' => $status,
+                ]);
                 return response()->json(['error' => 'Estado inválido'], 422);
             }
 
             $query->where('status', $status);
         }
+
+        Log::channel('usuarios')->info('Listado de órdenes consultado', [
+            'user_id' => $user->id,
+            'role' => $user->role,
+            'status' => $request->status ?? 'all',
+        ]);
 
         return response()->json($query->get());
     }
@@ -171,11 +207,20 @@ class OrderController extends Controller
     public function show($id)
     {
         $user = Auth::guard('api')->user();
-        $order = Order::with('items.product', 'items.quote')->findOrFail($id);
+        $order = Order::with('items.product', 'items.quote', 'user')->findOrFail($id);
 
-        if ($order->user_id !== $user->id) {
+        if (($user->role !== 'superadmin' && $user->role !== 'empleado') && $order->user_id !== $user->id) {
+            Log::channel('usuarios')->warning('Intento de acceder a orden no autorizada', [
+                'user_id' => $user->id,
+                'order_id' => $id,
+            ]);
             return response()->json(['error' => 'No autorizado'], 403);
         }
+
+        Log::channel('usuarios')->info('Detalle de orden consultado', [
+            'user_id' => $user->id,
+            'order_id' => $id,
+        ]);
 
         return response()->json($order);
     }
@@ -208,21 +253,33 @@ class OrderController extends Controller
     public function updateStatus(Request $request, $id)
     {
         $request->validate([
-            'status' => 'required|in:' . implode(',', Order::VALID_STATUSES)
+            'status' => 'required|in:' . implode(',', self::VALID_STATUSES)
         ]);
 
         $order = Order::findOrFail($id);
-
-        // Solo el dueño puede cambiar el estado (o podrías agregar un rol admin en el futuro)
         $user = Auth::guard('api')->user();
-        if ($order->user_id !== $user->id) {
-            return response()->json(['error' => 'No autorizado'], 403);
+
+        if ($user->role !== 'superadmin' && $user->role !== 'empleado') {
+            if ($order->user_id !== $user->id) {
+                Log::channel('usuarios')->warning('Intento de cambiar estado de orden no autorizada', [
+                    'user_id' => $user->id,
+                    'order_id' => $id,
+                ]);
+                return response()->json(['error' => 'No autorizado'], 403);
+            }
         }
 
+        $oldStatus = $order->status;
         $order->status = $request->status;
         $order->save();
 
+        Log::channel('usuarios')->info('Estado de orden actualizado', [
+            'user_id' => $user->id,
+            'order_id' => $id,
+            'old_status' => $oldStatus,
+            'new_status' => $order->status,
+        ]);
+
         return response()->json(['message' => 'Estado actualizado', 'order' => $order]);
     }
-
 }

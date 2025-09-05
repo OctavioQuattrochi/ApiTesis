@@ -61,13 +61,11 @@ class User extends Authenticatable implements JWTSubject
         return [];
     }
 
-    // Relación uno a uno con UserDetail
     public function detail()
     {
         return $this->hasOne(UserDetail::class);
     }
 
-    // Relación uno a uno con Cart
     public function cart()
     {
         return $this->hasOne(Cart::class);
@@ -78,7 +76,6 @@ class User extends Authenticatable implements JWTSubject
         return $this->hasMany(Order::class);
     }
 
-    // Sobrescribe la notificación de recuperación de contraseña
     public function sendPasswordResetNotification($token)
     {
         $this->notify(new CustomResetPassword($token));

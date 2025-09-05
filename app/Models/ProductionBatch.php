@@ -16,14 +16,12 @@ class ProductionBatch extends Model
         'status',
         'created_by',
     ];
-
-    // Relación con el producto
+    
     public function product()
     {
         return $this->belongsTo(Product::class);
     }
 
-    // Relación con el usuario creador
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');

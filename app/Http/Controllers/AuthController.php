@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\Log;
 use App\Models\User;
 
 /**
@@ -44,9 +45,11 @@ class AuthController extends Controller
         $credentials = $request->only(['email', 'password']);
 
         if (!$token = Auth::guard('api')->attempt($credentials)) {
+            Log::channel('usuarios')->warning('Intento de login fallido', ['email' => $credentials['email']]);
             return response()->json(['error' => 'Credenciales inválidas'], 401);
         }
 
+        Log::channel('usuarios')->info('Login exitoso', ['user_id' => Auth::guard('api')->user()->id]);
         return $this->respondWithToken($token);
     }
 
@@ -64,7 +67,9 @@ class AuthController extends Controller
      */
     public function me()
     {
-        return response()->json(Auth::guard('api')->user());
+        $user = Auth::guard('api')->user();
+        Log::channel('usuarios')->info('Consulta de usuario autenticado', ['user_id' => $user->id]);
+        return response()->json($user);
     }
 
     /**
@@ -81,6 +86,8 @@ class AuthController extends Controller
      */
     public function logout()
     {
+        $user = Auth::guard('api')->user();
+        Log::channel('usuarios')->info('Logout', ['user_id' => $user ? $user->id : null]);
         Auth::guard('api')->logout();
         return response()->json(['message' => 'Sesión cerrada correctamente']);
     }
@@ -132,6 +139,8 @@ class AuthController extends Controller
             'password' => bcrypt($request->password),
         ]);
 
+        Log::channel('usuarios')->info('Usuario registrado', ['user_id' => $user->id, 'email' => $user->email]);
+
         $token = Auth::guard('api')->login($user);
 
         return $this->respondWithToken($token);
@@ -182,7 +191,6 @@ class AuthController extends Controller
             'email' => $data['email'],
         ]);
 
-        // Asume que existe la relación 'detail' en el modelo User
         $user->detail()->updateOrCreate(
             ['user_id' => $user->id],
             [
@@ -193,6 +201,8 @@ class AuthController extends Controller
                 'dni' => $data['dni'] ?? '',
             ]
         );
+
+        Log::channel('usuarios')->info('Perfil actualizado', ['user_id' => $user->id]);
 
         return response()->json(['message' => 'Perfil actualizado correctamente']);
     }
@@ -223,6 +233,8 @@ class AuthController extends Controller
         $status = Password::sendResetLink(
             $request->only('email')
         );
+
+        Log::channel('usuarios')->info('Solicitud de recuperación de contraseña', ['email' => $request->email, 'status' => $status]);
 
         if ($status === Password::RESET_LINK_SENT) {
             return response()->json(['message' => 'Enlace de recuperación enviado']);
@@ -264,13 +276,14 @@ class AuthController extends Controller
         $user = User::where('email', $request->email)->first();
 
         if (!$user) {
+            Log::channel('usuarios')->error('Usuario no encontrado para restablecimiento', ['email' => $request->email]);
             return response()->json(['error' => 'Usuario no encontrado'], 404);
         }
 
-        // Aquí deberías verificar el token y restablecer la contraseña
-        // Este es un ejemplo básico, asegúrate de implementar la lógica adecuada
         $user->password = bcrypt($request->password);
         $user->save();
+
+        Log::channel('usuarios')->info('Contraseña restablecida', ['user_id' => $user->id]);
 
         return response()->json(['message' => 'Contraseña restablecida con éxito']);
     }

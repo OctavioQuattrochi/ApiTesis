@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\UserDetail;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 /**
  * @OA\Tag(
@@ -48,7 +49,6 @@ class UserDetailController extends Controller
 
         $user = Auth::guard('api')->user();
 
-        // Crear o actualizar detalle del usuario
         $detail = UserDetail::updateOrCreate(
             ['user_id' => $user->id],
             [
@@ -60,6 +60,11 @@ class UserDetailController extends Controller
                 'note' => $request->note,
             ]
         );
+
+        Log::channel('usuarios')->info('Detalle de usuario actualizado', [
+            'user_id' => $user->id,
+            'detail_id' => $detail->id,
+        ]);
 
         return response()->json([
             'message' => 'Detalles guardados correctamente',

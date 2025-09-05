@@ -3,6 +3,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class UserAdminController extends Controller
 {
@@ -40,6 +41,11 @@ class UserAdminController extends Controller
         $user = User::findOrFail($id);
         $user->role = $request->role;
         $user->save();
+
+        Log::channel('usuarios')->info('Rol actualizado', [
+            'user_id' => $user->id,
+            'new_role' => $user->role,
+        ]);
 
         return response()->json(['message' => 'Rol actualizado', 'user' => $user]);
     }
