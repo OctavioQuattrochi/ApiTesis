@@ -79,6 +79,7 @@ class ProductController extends Controller
                 'material' => $validated['material'],
                 'supplier' => $validated['supplier'],
                 'cost' => $validated['cost'],
+                'quantity' => 0,
                 'final_price' => $validated['cost'] * 1.5,
             ]);
         }
@@ -206,6 +207,47 @@ class ProductController extends Controller
         $materials = Product::where('type', 'raw_material')->get();
         Log::channel('produccion')->info('Listado de materias primas consultado', ['total' => $materials->count()]);
         return response()->json($materials);
+    }
+
+    /**
+     * @OA\Put(
+     *     path="/api/raw-materials/{id}/add-stock",
+     *     tags={"Products"},
+     *     summary="Agregar stock a una materia prima",
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"quantity"},
+     *             @OA\Property(property="quantity", type="integer", example=10)
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Stock actualizado")
+     * )
+     */
+    public function addStockRawMaterial(Request $request, $id)
+    {
+        $product = Product::where('type', 'raw_material')->findOrFail($id);
+
+        $request->validate([
+            'quantity' => 'required|integer|min:1',
+        ]);
+
+        $product->quantity += $request->quantity;
+        $product->save();
+
+        Log::channel('produccion')->info('Stock de materia prima incrementado', [
+            'product_id' => $product->id,
+            'added_quantity' => $request->quantity,
+            'new_quantity' => $product->quantity,
+        ]);
+
+        return response()->json(['message' => 'Stock actualizado', 'product' => $product]);
     }
 
     /**

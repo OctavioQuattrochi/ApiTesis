@@ -60,6 +60,9 @@ Route::middleware('auth:api')->group(function () {
         Route::put('/products/{id}', [ProductController::class, 'update']);
         Route::delete('/products/{id}', [ProductController::class, 'destroy']);
 
+        // Materias primas: agregar stock
+        Route::put('/raw-materials/{id}/add-stock', [ProductController::class, 'addStockRawMaterial']);
+
         // Cambiar estado de órdenes
         Route::put('/orders/{id}/status', [OrderController::class, 'updateStatus']);
 
