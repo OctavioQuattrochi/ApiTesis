@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
-use App\Models\ProductionBatch;
+use App\Models\ProductVariant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -67,6 +67,13 @@ class ProductController extends Controller
                 'quantity' => $validated['quantity'],
                 'location' => $validated['location'],
             ]);
+
+            Log::channel('produccion')->info('Producto creado', [
+                'product_id' => $product->id,
+                'type' => $product->type,
+                'name' => $product->name,
+                'color' => $product->color,
+            ]);
         } else {
             $validated = $request->validate([
                 'material' => 'required|string',
@@ -82,14 +89,14 @@ class ProductController extends Controller
                 'quantity' => 0,
                 'final_price' => $validated['cost'] * 1.5,
             ]);
-        }
 
-        Log::channel('produccion')->info('Producto creado', [
-            'product_id' => $product->id,
-            'type' => $product->type,
-            'name' => $product->name ?? null,
-            'color' => $product->color ?? null,
-        ]);
+            Log::channel('materias_primas')->info('Materia prima creada', [
+                'material_id' => $product->id,
+                'material' => $product->material,
+                'supplier' => $product->supplier,
+                'cost' => $product->cost,
+            ]);
+        }
 
         return response()->json(['message' => 'Producto creado exitosamente', 'product' => $product], 201);
     }
@@ -111,7 +118,13 @@ class ProductController extends Controller
     public function show($id)
     {
         $product = Product::findOrFail($id);
-        Log::channel('produccion')->info('Detalle de producto consultado', ['product_id' => $product->id]);
+
+        if ($product->type === 'product') {
+            Log::channel('produccion')->info('Detalle de producto consultado', ['product_id' => $product->id]);
+        } else {
+            Log::channel('materias_primas')->info('Detalle de materia prima consultado', ['material_id' => $product->id]);
+        }
+
         return response()->json($product);
     }
 
@@ -146,6 +159,13 @@ class ProductController extends Controller
             ]);
 
             $product->update($validated);
+
+            Log::channel('produccion')->info('Producto actualizado', [
+                'product_id' => $product->id,
+                'type' => $product->type,
+                'name' => $product->name,
+                'color' => $product->color,
+            ]);
         } else {
             $validated = $request->validate([
                 'material' => 'sometimes|required|string',
@@ -158,14 +178,14 @@ class ProductController extends Controller
             }
 
             $product->update($validated);
-        }
 
-        Log::channel('produccion')->info('Producto actualizado', [
-            'product_id' => $product->id,
-            'type' => $product->type,
-            'name' => $product->name ?? null,
-            'color' => $product->color ?? null,
-        ]);
+            Log::channel('materias_primas')->info('Materia prima actualizada', [
+                'material_id' => $product->id,
+                'material' => $product->material,
+                'supplier' => $product->supplier,
+                'cost' => $product->cost,
+            ]);
+        }
 
         return response()->json(['message' => 'Producto actualizado', 'product' => $product]);
     }
@@ -187,9 +207,14 @@ class ProductController extends Controller
     public function destroy($id)
     {
         $product = Product::findOrFail($id);
-        $product->delete();
 
-        Log::channel('produccion')->info('Producto eliminado', ['product_id' => $id]);
+        if ($product->type === 'product') {
+            Log::channel('produccion')->info('Producto eliminado', ['product_id' => $id]);
+        } else {
+            Log::channel('materias_primas')->info('Materia prima eliminada', ['material_id' => $id]);
+        }
+
+        $product->delete();
 
         return response()->json(['message' => 'Producto eliminado correctamente']);
     }
@@ -205,7 +230,7 @@ class ProductController extends Controller
     public function GetRawMaterials()
     {
         $materials = Product::where('type', 'raw_material')->get();
-        Log::channel('produccion')->info('Listado de materias primas consultado', ['total' => $materials->count()]);
+        Log::channel('materias_primas')->info('Listado de materias primas consultado', ['total' => $materials->count()]);
         return response()->json($materials);
     }
 
@@ -241,8 +266,8 @@ class ProductController extends Controller
         $product->quantity += $request->quantity;
         $product->save();
 
-        Log::channel('produccion')->info('Stock de materia prima incrementado', [
-            'product_id' => $product->id,
+        Log::channel('materias_primas')->info('Stock de materia prima incrementado', [
+            'material_id' => $product->id,
             'added_quantity' => $request->quantity,
             'new_quantity' => $product->quantity,
         ]);
@@ -266,30 +291,24 @@ class ProductController extends Controller
     }
 
     /**
-     * Consultar el stock actual de productos (base + variante/color) incluyendo el estado de producción
+     * Listado de stock por variantes (color)
      */
     public function stock(Request $request)
     {
-        $products = Product::select('id', 'name', 'color', 'quantity')
-            ->where('type', 'product')
-            ->orderBy('name')
-            ->get();
+        $variants = ProductVariant::with('product')->get();
 
-        $result = $products->map(function ($product) {
-            $lastBatch = ProductionBatch::where('product_id', $product->id)
-                ->orderBy('updated_at', 'desc')
-                ->first();
-
+        $result = $variants->map(function ($variant) {
             return [
-                'id' => $product->id,
-                'name' => $product->name,
-                'color' => $product->color,
-                'quantity' => $product->quantity,
-                'status' => $lastBatch ? $lastBatch->status : null,
+                'id' => $variant->id,
+                'product_id' => $variant->product_id,
+                'product_name' => $variant->product->name,
+                'color' => $variant->color,
+                'quantity' => $variant->quantity,
+                'price' => $variant->price,
             ];
         });
 
-        Log::channel('produccion')->info('Listado de stock consultado', ['total' => $result->count()]);
+        Log::channel('produccion')->info('Listado de stock por variantes consultado', ['total' => $result->count()]);
 
         return response()->json($result);
     }

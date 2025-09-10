@@ -56,35 +56,65 @@ class AnalyzerController extends Controller
         $neon = Product::where('material', 'Tira Neón')->first();
         $fuente = Product::where('material', 'Fuente')->first();
         $acrilico = Product::where('material', 'Acrílico')->first();
+        $mano_obra = Product::where('material', 'Mano de obra')->first();
 
-        $precio_neon = $neon->final_price ?? 5000;
-        $precio_fuente = $fuente->final_price ?? 3000;
-        $precio_acrilico = $acrilico->final_price ?? 0.5;
+        $precio_neon = $neon->final_price ?? 6000;
+        $precio_fuente = $fuente->final_price ?? 3750;
+        $precio_acrilico = $acrilico->final_price ?? 0.3;
+        $precio_mano_obra = $mano_obra->final_price ?? 10000;
 
         $imageName = $request->file('image')->getClientOriginalName();
 
+        // Guardar la imagen en storage/app/public/quotes
+        $imagePath = $request->file('image')->store('quotes', 'public');
+
         $prompt = <<<EOT
-Eres un experto en fabricación de carteles de neón LED. 
-Te daré los datos de un diseño y tus tareas son:
-- Estimar la cantidad de metros de tira de neón necesarios (vectorizando el contorno de la imagen).
-- Calcular cuántas fuentes de alimentación se requieren (1 fuente cada 4 metros de neón).
-- Calcular el área de acrílico necesario (alto x ancho en cm).
-- Usar los siguientes precios: 
-  - Tira Neón: $precio_neon ARS por metro
-  - Fuente: $precio_fuente ARS por unidad
-  - Acrílico: $precio_acrilico ARS por cm²
-- El diseño tiene las siguientes características:
-  - Imagen: $imageName (vectoriza el contorno para estimar metros de neón)
-  - Alto: {$request->height} cm
-  - Ancho: {$request->width} cm
-  - Color: {$request->color}
-  - Cantidad de carteles: {$request->quantity}
-- Devuelve el presupuesto estimado en ARS, detallando:
-  - Metros de neón necesarios y costo
-  - Cantidad de fuentes y costo
-  - Área de acrílico y costo
-  - Total para la cantidad solicitada (indica el total con el formato: TOTAL: $[valor numérico])
-  - Un breve desglose de cómo hiciste el cálculo
+Eres un experto en fabricación de carteles de neón LED.
+Tu tarea es calcular el presupuesto siguiendo exactamente estos pasos y fórmulas, sin improvisar ni inventar valores:
+
+1. Calcula el contorno del cartel en centímetros:
+   contorno = 2 * (alto + ancho)
+
+2. Calcula los metros de tira de neón necesarios:
+   metros_neon = contorno / 100
+
+3. Calcula la cantidad de fuentes de alimentación necesarias:
+   cantidad_fuentes = ceil(metros_neon / 4)
+
+4. Calcula el área de acrílico necesario:
+   area_acrilico = alto * ancho (en cm²)
+
+5. Calcula el costo de cada componente:
+   - Costo_neon = metros_neon * $precio_neon ARS
+   - Costo_fuente = cantidad_fuentes * $precio_fuente ARS
+   - Costo_acrilico = area_acrilico * $precio_acrilico ARS
+
+6. Calcula el costo de mano de obra:
+   - cantidad_mano_obra = metros_neon
+   - Costo_mano_obra = cantidad_mano_obra * $precio_mano_obra ARS
+
+7. Multiplica todos los costos por la cantidad de carteles.
+
+8. Muestra el resultado en el siguiente formato, usando los títulos y el orden exacto:
+
+Presupuesto para Cartel de Neón LED
+
+- Metros de neón: [metros_neon] metros x $precio_neon ARS = [Costo_neon] ARS
+- Fuentes: [cantidad_fuentes] x $precio_fuente ARS = [Costo_fuente] ARS
+- Acrílico: [area_acrilico] cm² x $precio_acrilico ARS = [Costo_acrilico] ARS
+- Mano de obra: [cantidad_mano_obra] x $precio_mano_obra ARS = [Costo_mano_obra] ARS
+- Cantidad de carteles: {$request->quantity}
+- TOTAL: $[valor numérico] ARS
+
+No escribas el total en ningún otro lugar, solo en la última línea con el formato exacto.
+No improvises ni inventes valores. Usa solo las fórmulas y datos proporcionados.
+
+Datos del diseño:
+- Imagen: $imageName
+- Alto: {$request->height} cm
+- Ancho: {$request->width} cm
+- Color: {$request->color}
+- Cantidad de carteles: {$request->quantity}
 EOT;
 
         try {
@@ -95,7 +125,7 @@ EOT;
                         ['role' => 'system', 'content' => 'Eres un asistente técnico de presupuestos para carteles de neón LED.'],
                         ['role' => 'user', 'content' => $prompt],
                     ],
-                    'max_tokens' => 500,
+                    'max_tokens' => 1500,
                 ]);
 
             if ($response->failed()) {
@@ -109,12 +139,14 @@ EOT;
             Log::channel('presupuestos')->info('Texto presupuesto generado por OpenAI', ['presupuesto' => $presupuesto]);
 
             $estimated_price = null;
-            if (preg_match('/TOTAL:\s*\$?([\d\.,]+)/i', $presupuesto, $matches)) {
-                $num = preg_replace('/[^\d\.,]/', '', $matches[1]);
+            if (preg_match_all('/TOTAL:\s*\$?([\d\.,]+)\s*ARS/i', $presupuesto, $matches)) {
+                $num = end($matches[1]);
+                $num = preg_replace('/[^\d\.,]/', '', $num);
                 $num = str_replace(',', '.', $num);
                 $estimated_price = is_numeric($num) ? floatval($num) : null;
-            } elseif (preg_match('/Total.*?([\d\.,]+)\s*ARS/i', $presupuesto, $matches)) {
-                $num = preg_replace('/[^\d\.,]/', '', $matches[1]);
+            } elseif (preg_match_all('/TOTAL:\s*\$?([\d\.,]+)/i', $presupuesto, $matches)) {
+                $num = end($matches[1]);
+                $num = preg_replace('/[^\d\.,]/', '', $num);
                 $num = str_replace(',', '.', $num);
                 $estimated_price = is_numeric($num) ? floatval($num) : null;
             }
@@ -123,13 +155,15 @@ EOT;
 
             $quote = Quote::create([
                 'user_id' => auth()->id(),
-                'length_cm' => null,
+                'length_cm' => $request->width,
                 'height_cm' => $request->height,
                 'width_cm' => $request->width,
                 'color' => $request->color,
+                'image' => $imagePath,
                 'quantity' => $request->quantity,
                 'estimated_price' => $estimated_price,
                 'raw_response' => json_encode($data),
+                'breakdown' => $presupuesto,
                 'status' => 'pendiente',
             ]);
 
@@ -138,6 +172,8 @@ EOT;
             return response()->json([
                 'estimated_price' => $estimated_price,
                 'quote_id' => $quote->id,
+                'breakdown' => $presupuesto,
+                'image' => $imagePath,
                 'raw' => $data,
             ]);
         } catch (\Exception $e) {
@@ -212,7 +248,9 @@ EOT;
             'color' => $quote->color,
             'quantity' => $quote->quantity,
             'estimated_price' => $quote->estimated_price,
+            'breakdown' => $quote->breakdown,
             'status' => $quote->status,
+            'image' => $quote->image,
             'created_at' => $quote->created_at,
             'updated_at' => $quote->updated_at,
             'user' => $quote->user,

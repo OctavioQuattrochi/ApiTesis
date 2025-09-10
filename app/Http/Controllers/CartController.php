@@ -29,11 +29,11 @@ class CartController extends Controller
     public function index()
     {
         $user = Auth::guard('api')->user();
-        $cart = $user->cart()->with('items.product', 'items.quote')->firstOrCreate();
+        $cart = $user->cart()->with('items.variant.product', 'items.quote')->firstOrCreate();
 
-        Log::channel('usuarios')->info('Consulta de carrito', ['user_id' => $user->id, 'cart_id' => $cart->id]);
+        Log::channel('carrito')->info('Consulta de carrito', ['user_id' => $user->id, 'cart_id' => $cart->id]);
 
-        return response()->json($cart->load('items.product', 'items.quote'));
+        return response()->json($cart->load('items.variant.product', 'items.quote'));
     }
 
     /**
@@ -46,7 +46,7 @@ class CartController extends Controller
      *         required=true,
      *         @OA\JsonContent(
      *             required={"quantity", "price_unit"},
-     *             @OA\Property(property="product_id", type="integer", example=1),
+     *             @OA\Property(property="variant_id", type="integer", example=1),
      *             @OA\Property(property="quote_id", type="integer", example=2),
      *             @OA\Property(property="quantity", type="integer", example=3),
      *             @OA\Property(property="price_unit", type="number", format="float", example=123.45)
@@ -59,34 +59,33 @@ class CartController extends Controller
     public function addItem(Request $request)
     {
         $request->validate([
-            'product_id' => 'nullable|exists:products,id',
+            'variant_id' => 'nullable|exists:product_variants,id',
             'quote_id' => 'nullable|exists:quotes,id',
             'quantity' => 'required|integer|min:1',
             'price_unit' => 'required|numeric|min:0',
         ]);
 
-        if (!$request->product_id && !$request->quote_id) {
-            Log::channel('usuarios')->warning('Intento de agregar ítem sin product_id ni quote_id', ['user_id' => Auth::guard('api')->id()]);
-            return response()->json(['error' => 'Se debe enviar product_id o quote_id'], 422);
+        if (!$request->variant_id && !$request->quote_id) {
+            Log::channel('carrito')->warning('Intento de agregar ítem sin variant_id ni quote_id', ['user_id' => Auth::guard('api')->id()]);
+            return response()->json(['error' => 'Se debe enviar variant_id o quote_id'], 422);
         }
 
         $user = Auth::guard('api')->user();
         $cart = $user->cart()->firstOrCreate(['user_id' => $user->id]);
 
         $query = $cart->items();
-        if ($request->product_id) {
-            $existingItem = $query->where('product_id', $request->product_id)->first();
+        if ($request->variant_id) {
+            $existingItem = $query->where('variant_id', $request->variant_id)->first();
         } else {
             $existingItem = $query->where('quote_id', $request->quote_id)->first();
         }
 
         if ($existingItem) {
-            // Si ya existe, actualizar la cantidad y subtotal
             $existingItem->quantity += $request->quantity;
             $existingItem->subtotal = $existingItem->quantity * $existingItem->price_unit;
             $existingItem->save();
 
-            Log::channel('usuarios')->info('Cantidad actualizada en el carrito', [
+            Log::channel('carrito')->info('Cantidad actualizada en el carrito', [
                 'user_id' => $user->id,
                 'cart_id' => $cart->id,
                 'item_id' => $existingItem->id,
@@ -95,19 +94,18 @@ class CartController extends Controller
 
             return response()->json(['message' => 'Cantidad actualizada en el carrito', 'item' => $existingItem], 200);
         } else {
-            // Si no existe, crear el ítem normalmente
             $subtotal = $request->quantity * $request->price_unit;
 
             $item = CartItem::create([
                 'cart_id' => $cart->id,
-                'product_id' => $request->product_id,
+                'variant_id' => $request->variant_id,
                 'quote_id' => $request->quote_id,
                 'quantity' => $request->quantity,
                 'price_unit' => $request->price_unit,
                 'subtotal' => $subtotal,
             ]);
 
-            Log::channel('usuarios')->info('Ítem agregado al carrito', [
+            Log::channel('carrito')->info('Ítem agregado al carrito', [
                 'user_id' => $user->id,
                 'cart_id' => $cart->id,
                 'item_id' => $item->id,
@@ -141,7 +139,7 @@ class CartController extends Controller
         $item = CartItem::findOrFail($id);
 
         if ($item->cart->user_id !== $user->id) {
-            Log::channel('usuarios')->warning('Intento de eliminar ítem no autorizado', [
+            Log::channel('carrito')->warning('Intento de eliminar ítem no autorizado', [
                 'user_id' => $user->id,
                 'item_id' => $item->id,
             ]);
@@ -150,7 +148,7 @@ class CartController extends Controller
 
         $item->delete();
 
-        Log::channel('usuarios')->info('Ítem eliminado del carrito', [
+        Log::channel('carrito')->info('Ítem eliminado del carrito', [
             'user_id' => $user->id,
             'item_id' => $id,
         ]);
@@ -174,7 +172,7 @@ class CartController extends Controller
 
         if ($cart) {
             $cart->items()->delete();
-            Log::channel('usuarios')->info('Carrito vaciado', [
+            Log::channel('carrito')->info('Carrito vaciado', [
                 'user_id' => $user->id,
                 'cart_id' => $cart->id,
             ]);

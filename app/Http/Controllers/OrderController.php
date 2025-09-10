@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\ProductVariant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -17,14 +18,13 @@ use Illuminate\Support\Facades\Log;
  */
 class OrderController extends Controller
 {
-    // Estados recomendados para órdenes
     const VALID_STATUSES = [
-        'pending',      // Pedido creado, esperando pago
-        'paid',         // Pagado y confirmado por admin
-        'processing',   // En preparación
-        'shipped',      // Enviado al cliente
-        'delivered',    // Entregado al cliente
-        'cancelled',    // Cancelado
+        'pending',
+        'paid',
+        'processing',
+        'shipped',
+        'delivered',
+        'cancelled',
     ];
 
     /**
@@ -42,23 +42,14 @@ class OrderController extends Controller
      *                 property="items",
      *                 type="array",
      *                 @OA\Items(
-     *                     @OA\Property(property="product_id", type="integer", example=1),
+     *                     @OA\Property(property="variant_id", type="integer", example=1),
      *                     @OA\Property(property="quantity", type="integer", example=2)
      *                 )
      *             )
      *         )
      *     ),
-     *     @OA\Response(
-     *         response=201,
-     *         description="Orden creada con éxito",
-     *         @OA\JsonContent(
-     *             @OA\Property(property="order_number", type="integer", example=123456),
-     *             @OA\Property(property="total", type="number", format="float", example=13000)
-     *         )
-     *     ),
-     *     @OA\Response(response=400, description="El carrito está vacío"),
-     *     @OA\Response(response=422, description="Datos inválidos"),
-     *     @OA\Response(response=500, description="Error al procesar la orden")
+     *     @OA\Response(response=201, description="Orden creada"),
+     *     @OA\Response(response=422, description="Error de validación")
      * )
      */
     public function checkout(Request $request)
@@ -68,7 +59,7 @@ class OrderController extends Controller
         $request->validate([
             'payment_method' => 'required|string',
             'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|integer|exists:products,id',
+            'items.*.variant_id' => 'required|integer|exists:product_variants,id',
             'items.*.quantity' => 'required|integer|min:1',
         ]);
 
@@ -79,13 +70,13 @@ class OrderController extends Controller
             $orderItems = [];
 
             foreach ($request->items as $item) {
-                $product = \App\Models\Product::find($item['product_id']);
-                $price_unit = $product->final_price ?? 0;
+                $variant = ProductVariant::find($item['variant_id']);
+                $price_unit = $variant->price ?? 0;
                 $subtotal = $item['quantity'] * $price_unit;
                 $total += $subtotal;
 
                 $orderItems[] = [
-                    'product_id' => $item['product_id'],
+                    'variant_id' => $item['variant_id'],
                     'quantity' => $item['quantity'],
                     'price_unit' => $price_unit,
                     'subtotal' => $subtotal,
@@ -102,19 +93,18 @@ class OrderController extends Controller
             foreach ($orderItems as $orderItem) {
                 OrderItem::create([
                     'order_id' => $order->id,
-                    'product_id' => $orderItem['product_id'],
+                    'variant_id' => $orderItem['variant_id'],
                     'quantity' => $orderItem['quantity'],
                     'price_unit' => $orderItem['price_unit'],
                     'subtotal' => $orderItem['subtotal'],
                 ]);
-                    // Reducir stock del producto
-                $product = \App\Models\Product::find($orderItem['product_id']);
-                if ($product && $product->type === 'product') {
-                    $product->decrement('quantity', $orderItem['quantity']);
+                $variant = ProductVariant::find($orderItem['variant_id']);
+                if ($variant) {
+                    $variant->decrement('quantity', $orderItem['quantity']);
                 }
             }
 
-            Log::channel('usuarios')->info('Orden creada', [
+            Log::channel('ordenes')->info('Orden creada', [
                 'order_id' => $order->id,
                 'user_id' => $user->id,
                 'total' => $order->total,
@@ -130,7 +120,7 @@ class OrderController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::channel('usuarios')->error('Error al procesar la orden', [
+            Log::channel('ordenes')->error('Error al procesar la orden', [
                 'user_id' => $user->id,
                 'details' => $e->getMessage(),
             ]);
@@ -142,13 +132,13 @@ class OrderController extends Controller
      * @OA\Get(
      *     path="/api/orders",
      *     tags={"Orders"},
-     *     summary="Listar todos los pedidos del usuario autenticado",
+     *     summary="Listar órdenes (ventas para admin/superadmin, 'mis compras' para cliente)",
      *     security={{"bearerAuth":{}}},
      *     @OA\Parameter(
      *         name="status",
      *         in="query",
      *         required=false,
-     *         description="Filtrar por estado de la orden",
+     *         description="Filtrar por estado",
      *         @OA\Schema(type="string")
      *     ),
      *     @OA\Response(response=200, description="Listado de órdenes")
@@ -159,16 +149,16 @@ class OrderController extends Controller
         $user = Auth::guard('api')->user();
 
         if ($user->role === 'superadmin' || $user->role === 'empleado') {
-            $query = Order::with('items.product', 'items.quote', 'user')->latest();
+            $query = Order::with('items.variant.product', 'items.quote', 'user')->latest();
         } else {
-            $query = $user->orders()->with('items.product', 'items.quote', 'user')->latest();
+            $query = $user->orders()->with('items.variant.product', 'items.quote', 'user')->latest();
         }
 
         if ($request->has('status')) {
             $status = $request->status;
 
             if (!in_array($status, self::VALID_STATUSES)) {
-                Log::channel('usuarios')->warning('Intento de filtrar órdenes por estado inválido', [
+                Log::channel('ordenes')->warning('Intento de filtrar órdenes por estado inválido', [
                     'user_id' => $user->id,
                     'status' => $status,
                 ]);
@@ -178,7 +168,7 @@ class OrderController extends Controller
             $query->where('status', $status);
         }
 
-        Log::channel('usuarios')->info('Listado de órdenes consultado', [
+        Log::channel('ordenes')->info('Listado de órdenes consultado', [
             'user_id' => $user->id,
             'role' => $user->role,
             'status' => $request->status ?? 'all',
@@ -191,33 +181,33 @@ class OrderController extends Controller
      * @OA\Get(
      *     path="/api/orders/{id}",
      *     tags={"Orders"},
-     *     summary="Ver el detalle de un pedido específico",
+     *     summary="Ver el detalle de una orden específica",
      *     security={{"bearerAuth":{}}},
      *     @OA\Parameter(
      *         name="id",
      *         in="path",
      *         required=true,
-     *         description="ID del pedido",
+     *         description="ID de la orden",
      *         @OA\Schema(type="integer")
      *     ),
-     *     @OA\Response(response=200, description="Detalle del pedido"),
+     *     @OA\Response(response=200, description="Detalle de la orden"),
      *     @OA\Response(response=403, description="No autorizado")
      * )
      */
     public function show($id)
     {
         $user = Auth::guard('api')->user();
-        $order = Order::with('items.product', 'items.quote', 'user')->findOrFail($id);
+        $order = Order::with('items.variant.product', 'items.quote', 'user')->findOrFail($id);
 
         if (($user->role !== 'superadmin' && $user->role !== 'empleado') && $order->user_id !== $user->id) {
-            Log::channel('usuarios')->warning('Intento de acceder a orden no autorizada', [
+            Log::channel('ordenes')->warning('Intento de acceder a orden no autorizada', [
                 'user_id' => $user->id,
                 'order_id' => $id,
             ]);
             return response()->json(['error' => 'No autorizado'], 403);
         }
 
-        Log::channel('usuarios')->info('Detalle de orden consultado', [
+        Log::channel('ordenes')->info('Detalle de orden consultado', [
             'user_id' => $user->id,
             'order_id' => $id,
         ]);
@@ -242,7 +232,7 @@ class OrderController extends Controller
      *         required=true,
      *         @OA\JsonContent(
      *             required={"status"},
-     *             @OA\Property(property="status", type="string", example="pending")
+     *             @OA\Property(property="status", type="string", example="paid")
      *         )
      *     ),
      *     @OA\Response(response=200, description="Estado actualizado"),
@@ -261,7 +251,7 @@ class OrderController extends Controller
 
         if ($user->role !== 'superadmin' && $user->role !== 'empleado') {
             if ($order->user_id !== $user->id) {
-                Log::channel('usuarios')->warning('Intento de cambiar estado de orden no autorizada', [
+                Log::channel('ordenes')->warning('Intento de cambiar estado de orden no autorizada', [
                     'user_id' => $user->id,
                     'order_id' => $id,
                 ]);
@@ -273,7 +263,7 @@ class OrderController extends Controller
         $order->status = $request->status;
         $order->save();
 
-        Log::channel('usuarios')->info('Estado de orden actualizado', [
+        Log::channel('ordenes')->info('Estado de orden actualizado', [
             'user_id' => $user->id,
             'order_id' => $id,
             'old_status' => $oldStatus,

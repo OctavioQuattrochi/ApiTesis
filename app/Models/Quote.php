@@ -22,9 +22,11 @@ class Quote extends Model
         'height_cm',
         'width_cm',
         'color',
+        'image',
         'quantity',
         'estimated_price',
         'raw_response',
+        'breakdown',
         'status',
     ];
 

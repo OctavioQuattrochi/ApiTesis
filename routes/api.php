@@ -17,6 +17,7 @@ Route::get('/predefined-products', [ProductController::class, 'predefinedProduct
 
 // Recuperar contraseña
 Route::post('/password/email', [AuthController::class, 'sendResetLinkEmail']);
+Route::post('/password/reset', [AuthController::class, 'resetPassword']);
 
 // Rutas protegidas por JWT
 Route::middleware('auth:api')->group(function () {

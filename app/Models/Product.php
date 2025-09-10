@@ -19,6 +19,12 @@ class Product extends Model
         'final_price'
     ];
 
+    // Relación con variantes
+    public function variants()
+    {
+        return $this->hasMany(ProductVariant::class);
+    }
+
     // Accessor para la URL de la imagen
     public function getImageUrlAttribute()
     {

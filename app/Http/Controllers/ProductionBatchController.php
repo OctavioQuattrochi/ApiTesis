@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ProductionBatch;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -75,6 +76,7 @@ class ProductionBatchController extends Controller
             'color' => 'nullable|string|max:100',
             'quantity' => 'required|integer|min:1',
             'status' => 'in:Pendiente,En produccion,Finalizado',
+            'price' => 'nullable|numeric|min:0',
         ]);
 
         $data['created_by'] = Auth::id();
@@ -88,6 +90,7 @@ class ProductionBatchController extends Controller
             'quantity' => $batch->quantity,
             'status' => $batch->status,
             'created_by' => $batch->created_by,
+            'price' => $batch->price ?? null,
         ]);
 
         if ($batch->status === 'Finalizado') {
@@ -128,6 +131,7 @@ class ProductionBatchController extends Controller
         $data = $request->validate([
             'status' => 'in:Pendiente,En produccion,Finalizado',
             'quantity' => 'integer|min:1',
+            'price' => 'nullable|numeric|min:0',
         ]);
 
         $wasFinalized = $batch->status === 'Finalizado';
@@ -139,6 +143,7 @@ class ProductionBatchController extends Controller
             'batch_id' => $batch->id,
             'new_status' => $batch->status,
             'quantity' => $batch->quantity,
+            'price' => $batch->price ?? null,
         ]);
         
         if ($batch->status === 'Finalizado' && !$wasFinalized) {
@@ -148,18 +153,31 @@ class ProductionBatchController extends Controller
         return response()->json($batch);
     }
 
-    // Sumar la cantidad del lote al stock del producto correspondiente
+    /**
+     * Sumar la cantidad del lote al stock de la variante correspondiente
+     */
     protected function addToStock(ProductionBatch $batch)
     {
-        $product = Product::where('id', $batch->product_id)
-            ->when($batch->color, function ($query) use ($batch) {
-                return $query->where('color', $batch->color);
-            })
+        $product = Product::find($batch->product_id);
+        $price = $product ? $product->final_price : null;
+
+        $variant = ProductVariant::where('product_id', $batch->product_id)
+            ->where('color', $batch->color)
             ->first();
 
-        if ($product) {
-            $product->quantity += $batch->quantity;
-            $product->save();
+        if ($variant) {
+            $variant->quantity += $batch->quantity;
+            if ($price !== null) {
+                $variant->price = $price;
+            }
+            $variant->save();
+        } else {
+            ProductVariant::create([
+                'product_id' => $batch->product_id,
+                'color' => $batch->color,
+                'quantity' => $batch->quantity,
+                'price' => $price,
+            ]);
         }
     }
 }

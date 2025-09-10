@@ -45,11 +45,19 @@ class AuthController extends Controller
         $credentials = $request->only(['email', 'password']);
 
         if (!$token = Auth::guard('api')->attempt($credentials)) {
-            Log::channel('usuarios')->warning('Intento de login fallido', ['email' => $credentials['email']]);
+            Log::channel('auth')->warning('Intento de login fallido', [
+                'email' => $credentials['email'],
+                'ip' => $request->ip(),
+            ]);
             return response()->json(['error' => 'Credenciales inválidas'], 401);
         }
 
-        Log::channel('usuarios')->info('Login exitoso', ['user_id' => Auth::guard('api')->user()->id]);
+        $user = Auth::guard('api')->user();
+        Log::channel('auth')->info('Login exitoso', [
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'ip' => $request->ip(),
+        ]);
         return $this->respondWithToken($token);
     }
 
@@ -68,7 +76,10 @@ class AuthController extends Controller
     public function me()
     {
         $user = Auth::guard('api')->user();
-        Log::channel('usuarios')->info('Consulta de usuario autenticado', ['user_id' => $user->id]);
+        Log::channel('auth')->info('Consulta de usuario autenticado', [
+            'user_id' => $user->id,
+            'email' => $user->email,
+        ]);
         return response()->json($user);
     }
 
@@ -87,7 +98,10 @@ class AuthController extends Controller
     public function logout()
     {
         $user = Auth::guard('api')->user();
-        Log::channel('usuarios')->info('Logout', ['user_id' => $user ? $user->id : null]);
+        Log::channel('auth')->info('Logout', [
+            'user_id' => $user ? $user->id : null,
+            'email' => $user ? $user->email : null,
+        ]);
         Auth::guard('api')->logout();
         return response()->json(['message' => 'Sesión cerrada correctamente']);
     }
@@ -139,7 +153,11 @@ class AuthController extends Controller
             'password' => bcrypt($request->password),
         ]);
 
-        Log::channel('usuarios')->info('Usuario registrado', ['user_id' => $user->id, 'email' => $user->email]);
+        Log::channel('auth')->info('Usuario registrado', [
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'ip' => $request->ip(),
+        ]);
 
         $token = Auth::guard('api')->login($user);
 
@@ -202,7 +220,10 @@ class AuthController extends Controller
             ]
         );
 
-        Log::channel('usuarios')->info('Perfil actualizado', ['user_id' => $user->id]);
+        Log::channel('auth')->info('Perfil actualizado', [
+            'user_id' => $user->id,
+            'email' => $user->email,
+        ]);
 
         return response()->json(['message' => 'Perfil actualizado correctamente']);
     }
@@ -234,7 +255,11 @@ class AuthController extends Controller
             $request->only('email')
         );
 
-        Log::channel('usuarios')->info('Solicitud de recuperación de contraseña', ['email' => $request->email, 'status' => $status]);
+        Log::channel('auth')->info('Solicitud de recuperación de contraseña', [
+            'email' => $request->email,
+            'status' => $status,
+            'ip' => $request->ip(),
+        ]);
 
         if ($status === Password::RESET_LINK_SENT) {
             return response()->json(['message' => 'Enlace de recuperación enviado']);
@@ -276,14 +301,21 @@ class AuthController extends Controller
         $user = User::where('email', $request->email)->first();
 
         if (!$user) {
-            Log::channel('usuarios')->error('Usuario no encontrado para restablecimiento', ['email' => $request->email]);
+            Log::channel('auth')->error('Usuario no encontrado para restablecimiento', [
+                'email' => $request->email,
+                'ip' => $request->ip(),
+            ]);
             return response()->json(['error' => 'Usuario no encontrado'], 404);
         }
 
         $user->password = bcrypt($request->password);
         $user->save();
 
-        Log::channel('usuarios')->info('Contraseña restablecida', ['user_id' => $user->id]);
+        Log::channel('auth')->info('Contraseña restablecida', [
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'ip' => $request->ip(),
+        ]);
 
         return response()->json(['message' => 'Contraseña restablecida con éxito']);
     }
