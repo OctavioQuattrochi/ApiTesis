@@ -26,7 +26,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/user', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::post('/user/details', [UserDetailController::class, 'store']);
-    Route::put('/user', [AuthController::class, 'updateProfile']); // <-- NUEVA RUTA PARA EDITAR PERFIL
+    Route::put('/user', [AuthController::class, 'updateProfile']);
 
     // Rutas accesibles por cualquier usuario logueado
     Route::middleware('roleMiddleware:usuario')->group(function () {
@@ -74,6 +74,9 @@ Route::middleware('auth:api')->group(function () {
 
         // Consultar stock actual
         Route::get('/stock', [ProductController::class, 'stock']);
+
+        // Listado de ventas (productos de línea y personalizados pagados)
+        Route::get('/ventas', [OrderController::class, 'ventas']);
     });
 
     // Rutas exclusivas de superadmin

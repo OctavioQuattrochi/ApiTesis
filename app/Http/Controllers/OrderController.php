@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\ProductVariant;
+use App\Models\Quote;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -263,6 +264,21 @@ class OrderController extends Controller
         $order->status = $request->status;
         $order->save();
 
+        // Si el estado cambia a cancelado, reincorporar stock de variantes
+        if ($request->status === 'cancelled' && $oldStatus !== 'cancelled') {
+            foreach ($order->items as $item) {
+                $variant = \App\Models\ProductVariant::find($item->variant_id);
+                if ($variant) {
+                    $variant->quantity += $item->quantity;
+                    $variant->save();
+                }
+            }
+            Log::channel('ordenes')->info('Stock reincorporado por cancelación de orden', [
+                'order_id' => $order->id,
+                'user_id' => $order->user_id,
+            ]);
+        }
+
         Log::channel('ordenes')->info('Estado de orden actualizado', [
             'user_id' => $user->id,
             'order_id' => $id,
@@ -271,5 +287,73 @@ class OrderController extends Controller
         ]);
 
         return response()->json(['message' => 'Estado actualizado', 'order' => $order]);
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/ventas",
+     *     tags={"Orders"},
+     *     summary="Listar todas las ventas (productos de línea y personalizados pagados)",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="fecha_inicio",
+     *         in="query",
+     *         required=false,
+     *         description="Fecha de inicio (YYYY-MM-DD)",
+     *         @OA\Schema(type="string", format="date")
+     *     ),
+     *     @OA\Parameter(
+     *         name="fecha_fin",
+     *         in="query",
+     *         required=false,
+     *         description="Fecha de fin (YYYY-MM-DD)",
+     *         @OA\Schema(type="string", format="date")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Listado de ventas",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="orders", type="array", @OA\Items(type="object")),
+     *             @OA\Property(property="quotes", type="array", @OA\Items(type="object"))
+     *         )
+     *     )
+     * )
+     */
+    public function ventas(Request $request)
+    {
+        $estadosValidos = [
+            'paid', 'processing', 'shipped', 'delivered',
+            'pagado', 'en_produccion', 'listo_para_entregar', 'entregado'
+        ];
+
+        $fechaInicio = $request->input('fecha_inicio');
+        $fechaFin = $request->input('fecha_fin');
+
+        $ordersQuery = Order::with('items.variant.product', 'items.quote', 'user')
+            ->whereIn('status', ['paid', 'processing', 'shipped', 'delivered']);
+
+        if ($fechaInicio) {
+            $ordersQuery->whereDate('created_at', '>=', $fechaInicio);
+        }
+        if ($fechaFin) {
+            $ordersQuery->whereDate('created_at', '<=', $fechaFin);
+        }
+        $orders = $ordersQuery->get();
+
+        $quotesQuery = Quote::with('user')
+            ->whereIn('status', ['pagado', 'en_produccion', 'listo_para_entregar', 'entregado']);
+
+        if ($fechaInicio) {
+            $quotesQuery->whereDate('created_at', '>=', $fechaInicio);
+        }
+        if ($fechaFin) {
+            $quotesQuery->whereDate('created_at', '<=', $fechaFin);
+        }
+        $quotes = $quotesQuery->get();
+
+        return response()->json([
+            'orders' => $orders,
+            'quotes' => $quotes,
+        ]);
     }
 }

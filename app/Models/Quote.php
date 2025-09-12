@@ -14,6 +14,7 @@ class Quote extends Model
         'en_produccion',
         'listo_para_entregar',
         'entregado',
+        'cancelado',
     ];
 
     protected $fillable = [

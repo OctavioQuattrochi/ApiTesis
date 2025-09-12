@@ -64,9 +64,28 @@ class AnalyzerController extends Controller
         $precio_mano_obra = $mano_obra->final_price ?? 10000;
 
         $imageName = $request->file('image')->getClientOriginalName();
-
-        // Guardar la imagen en storage/app/public/quotes
         $imagePath = $request->file('image')->store('quotes', 'public');
+
+        // Calcular cantidades
+        $contorno = 2 * ($request->height + $request->width); // cm
+        $metros_neon = $contorno / 100;
+        $cantidad_fuentes = ceil($metros_neon / 4);
+        $area_acrilico = $request->height * $request->width; // cm²
+        $cantidad = $request->quantity;
+
+        // Descontar stock de materia prima
+        if ($neon) {
+            $neon->quantity -= $metros_neon * $cantidad;
+            $neon->save();
+        }
+        if ($fuente) {
+            $fuente->quantity -= $cantidad_fuentes * $cantidad;
+            $fuente->save();
+        }
+        if ($acrilico) {
+            $acrilico->quantity -= $area_acrilico * $cantidad;
+            $acrilico->save();
+        }
 
         $prompt = <<<EOT
 Eres un experto en fabricación de carteles de neón LED.
@@ -297,6 +316,42 @@ EOT;
 
         $oldStatus = $quote->status;
         $data = $request->only(['estimated_price', 'breakdown', 'status']);
+
+        // Si el estado cambia a cancelado, reincorporar stock
+        if (
+            isset($data['status']) &&
+            $data['status'] === 'cancelado' &&
+            $oldStatus !== 'cancelado'
+        ) {
+            // Recuperar cantidades usadas
+            $contorno = 2 * ($quote->height_cm + $quote->width_cm);
+            $metros_neon = $contorno / 100;
+            $cantidad_fuentes = ceil($metros_neon / 4);
+            $area_acrilico = $quote->height_cm * $quote->width_cm;
+            $cantidad = $quote->quantity;
+
+            $neon = Product::where('material', 'Tira Neón')->first();
+            $fuente = Product::where('material', 'Fuente')->first();
+            $acrilico = Product::where('material', 'Acrílico')->first();
+
+            if ($neon) {
+                $neon->quantity += $metros_neon * $cantidad;
+                $neon->save();
+            }
+            if ($fuente) {
+                $fuente->quantity += $cantidad_fuentes * $cantidad;
+                $fuente->save();
+            }
+            if ($acrilico) {
+                $acrilico->quantity += $area_acrilico * $cantidad;
+                $acrilico->save();
+            }
+            Log::channel('materias_primas')->info('Stock reincorporado por cancelación de presupuesto', [
+                'quote_id' => $quote->id,
+                'user_id' => $quote->user_id,
+            ]);
+        }
+
         $quote->update($data);
 
         Log::channel('presupuestos')->info('Presupuesto actualizado', [
