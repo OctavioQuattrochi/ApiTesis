@@ -197,11 +197,12 @@ class AuthController extends Controller
         $data = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|max:255|unique:users,email,' . $user->id,
-            'direccion' => 'nullable|string|max:255',
-            'localidad' => 'nullable|string|max:100',
-            'provincia' => 'nullable|string|max:100',
-            'telefono' => 'nullable|string|max:20',
-            'dni' => 'nullable|string|max:20',
+            'detail.address' => 'nullable|string|max:255',
+            'detail.city' => 'nullable|string|max:100',
+            'detail.province' => 'nullable|string|max:100',
+            'detail.phone' => 'nullable|string|max:20',
+            'detail.dni' => 'nullable|string|max:20',
+            'detail.note' => 'nullable|string|max:500',
         ]);
 
         $user->update([
@@ -209,16 +210,19 @@ class AuthController extends Controller
             'email' => $data['email'],
         ]);
 
-        $user->detail()->updateOrCreate(
-            ['user_id' => $user->id],
-            [
-                'address' => $data['direccion'] ?? '',
-                'city' => $data['localidad'] ?? '',
-                'province' => $data['provincia'] ?? '',
-                'phone' => $data['telefono'] ?? '',
-                'dni' => $data['dni'] ?? '',
-            ]
-        );
+        if (isset($data['detail'])) {
+            $user->detail()->updateOrCreate(
+                ['user_id' => $user->id],
+                [
+                    'address' => $data['detail']['address'] ?? '',
+                    'city' => $data['detail']['city'] ?? '',
+                    'province' => $data['detail']['province'] ?? '',
+                    'phone' => $data['detail']['phone'] ?? '',
+                    'dni' => $data['detail']['dni'] ?? '',
+                    'note' => $data['detail']['note'] ?? '',
+                ]
+            );
+        }
 
         Log::channel('auth')->info('Perfil actualizado', [
             'user_id' => $user->id,

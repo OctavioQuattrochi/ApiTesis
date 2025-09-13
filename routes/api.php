@@ -52,6 +52,11 @@ Route::middleware('auth:api')->group(function () {
         Route::post('/checkout', [OrderController::class, 'checkout']);
         Route::get('/orders', [OrderController::class, 'index']);
         Route::get('/orders/{id}', [OrderController::class, 'show']);
+
+        Route::get('/stock', [ProductController::class, 'stock']);
+        Route::get('/users/{id}', [UserAdminController::class, 'show']);
+
+        Route::put('/quotes/{id}', [AnalyzerController::class, 'update']);
     });
 
     // Rutas para empleados (y superadmin)
@@ -72,21 +77,15 @@ Route::middleware('auth:api')->group(function () {
         Route::post('/produccion', [ProductionBatchController::class, 'store']);
         Route::put('/produccion/{id}', [ProductionBatchController::class, 'update']);
 
-        // Consultar stock actual
-        Route::get('/stock', [ProductController::class, 'stock']);
-
         // Listado de ventas (productos de línea y personalizados pagados)
         Route::get('/ventas', [OrderController::class, 'ventas']);
     });
 
     // Rutas exclusivas de superadmin
     Route::middleware('roleMiddleware:superadmin')->group(function () {
-        Route::get('/quotes', [AnalyzerController::class, 'listQuotes']);
         Route::get('/presupuestos', [AnalyzerController::class, 'pendingQuotes']);
         Route::get('/quotes/{id}', [AnalyzerController::class, 'show']);
-        Route::put('/quotes/{id}', [AnalyzerController::class, 'update']);
         Route::get('/users', [UserAdminController::class, 'index']);
-        Route::get('/users/{id}', [UserAdminController::class, 'show']);
         Route::put('/users/{id}/role', [UserAdminController::class, 'updateRole']);
     });
 });

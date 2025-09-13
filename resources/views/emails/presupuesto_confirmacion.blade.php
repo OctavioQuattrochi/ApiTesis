@@ -40,7 +40,7 @@
                             <p style="font-size: 16px; color: #333; margin-bottom: 8px;">
                                 <strong>Confirmar presupuesto desde "Mis Presupuestos" y enviar comprobante por wsp:</strong><br>
                                 <span>CBU: <strong>0000003100000001234567</strong></span><br>
-                                <span>WhatsApp: <strong>+54 9 11 2345-6789</strong></span>
+                                <span>WhatsApp: <strong>+54 9 351 2505516</strong></span>
                             </p>
                             <p style="font-size: 16px; color: #333; margin-bottom: 8px;">Si tienes alguna pregunta, no dudes en contactarnos.</p>
                             <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 24px 0;">
