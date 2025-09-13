@@ -79,12 +79,13 @@ Route::middleware('auth:api')->group(function () {
 
         // Listado de ventas (productos de línea y personalizados pagados)
         Route::get('/ventas', [OrderController::class, 'ventas']);
+
+        Route::get('/quotes/{id}', [AnalyzerController::class, 'show']);
     });
 
     // Rutas exclusivas de superadmin
     Route::middleware('roleMiddleware:superadmin')->group(function () {
         Route::get('/presupuestos', [AnalyzerController::class, 'pendingQuotes']);
-        Route::get('/quotes/{id}', [AnalyzerController::class, 'show']);
         Route::get('/users', [UserAdminController::class, 'index']);
         Route::put('/users/{id}/role', [UserAdminController::class, 'updateRole']);
     });

@@ -184,6 +184,7 @@ EOT;
                 'raw_response' => json_encode($data),
                 'breakdown' => $presupuesto,
                 'status' => 'pendiente',
+                'note' => $request->note ?? null,
             ]);
 
             Log::channel('presupuestos')->info('Presupuesto creado', ['quote_id' => $quote->id, 'data' => $quote]);
@@ -216,7 +217,7 @@ EOT;
 
         $query = Quote::with('user')->latest();
 
-        if ($user->role !== 'superadmin') {
+        if ($user->role !== 'superadmin' && $user->role !== 'empleado') {
             $query->where('user_id', $user->id);
         }
 
@@ -229,12 +230,22 @@ EOT;
 
     public function pendingQuotes()
     {
-        return response()->json(
-            Quote::with('user')
-                ->where('status', 'pendiente')
-                ->latest()
-                ->get()
-        );
+        $user = auth()->user();
+
+        if ($user->role === 'superadmin' || $user->role === 'empleado') {
+            return response()->json(
+                Quote::with('user')
+                    ->latest()
+                    ->get()
+            );
+        } else {
+            return response()->json(
+                Quote::with('user')
+                    ->where('user_id', $user->id)
+                    ->latest()
+                    ->get()
+            );
+        }
     }
 
     /**
@@ -270,6 +281,7 @@ EOT;
             'breakdown' => $quote->breakdown,
             'status' => $quote->status,
             'image' => $quote->image,
+            'note' => $quote->note,
             'created_at' => $quote->created_at,
             'updated_at' => $quote->updated_at,
             'user' => $quote->user,

@@ -28,6 +28,7 @@ class Quote extends Model
         'estimated_price',
         'raw_response',
         'breakdown',
+        'note',
         'status',
     ];
 
